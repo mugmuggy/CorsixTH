@@ -1009,9 +1009,6 @@ function World:onTick()
         end
 
         if self.game_date:isLastDayOfYear() then
-          -- It is crucial that the annual report gets to initialize before onEndYear is called.
-          -- Yearly statistics are reset there.
-          self.ui:addWindow(UIAnnualReport(self.ui, self))
           self:onEndYear()
         end
       end
@@ -1352,6 +1349,7 @@ function World:checkWinningConditions(player_no)
   -- As soon as a goal that doesn't support this is found it is changed.
   local result = {state = "win"}
   local hospital = self.hospitals[player_no]
+  local win_count = 0
 
   -- Go through the goals
   for _, goal in ipairs(self.goals) do
@@ -1374,6 +1372,7 @@ function World:checkWinningConditions(player_no)
       end
     end
     if goal.win_value then
+      win_count = win_count + 1
       local max_min = goal.max_min_win == 1 and 1 or -1
       -- Special case for balance, subtract any loans!
       if goal.name == "balance" then
@@ -1383,7 +1382,15 @@ function World:checkWinningConditions(player_no)
       if (current_value - goal.win_value) * max_min <= 0 then
         result.state = "nothing"
       end
+      if max_min == 1 then
+        result.score = math.min(math.abs(current_value / goal.win_value), 200) + result.score
+      else
+        result.score = math.min(math.abs(goal.win_value / current_value), 200) + result.score
+      end
     end
+  end
+  if win_count > 0 then
+    result.score = result.score / win_count
   end
   return result
 end
@@ -1519,6 +1526,28 @@ end
 
 -- Called immediately prior to the ingame year changing.
 function World:onEndYear()
+  local score_salary_inc = {
+    {upper = 0.1, value = 1.0},
+    {upper = 0.5, value = 1.05},
+    {upper = 0.6, value = 1.06},
+    {upper = 0.7, value = 1.07},
+    {upper = 0.8, value = 1.08},
+    {upper = 0.9, value = 1.09},
+    {upper = 1.0, value = 1.10},
+    {upper = 1.05, value = 1.50},
+    {upper = 1.10, value = 1.55},
+    {upper = 1.20, value = 1.56},
+    {upper = 1.30, value = 1.58},
+    {upper = 1.50, value = 1.62},
+    {upper = 1.75, value = 1.62},
+                {value = 1.65}
+  for i, _ in ipairs(self.hospitals) do
+    local res = self:checkWinningConditions(i)
+    self.hospitals[i].player_salary = self.hospitals.player_salary * rangeMapLookup(res.score, score_salary_inc)
+  end
+  -- It is crucial that the annual report gets to initialize before onEndYear is called.
+  -- Yearly statistics are reset there.
+  self.ui:addWindow(UIAnnualReport(self.ui, self))
   for _, hospital in ipairs(self.hospitals) do
     hospital:onEndYear()
   end
