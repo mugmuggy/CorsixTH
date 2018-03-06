@@ -1347,7 +1347,7 @@ function World:checkWinningConditions(player_no)
 
   -- Default is to win.
   -- As soon as a goal that doesn't support this is found it is changed.
-  local result = {state = "win"}
+  local result = {state = "win", score = 0}
   local hospital = self.hospitals[player_no]
   local win_count = 0
 
@@ -1383,9 +1383,9 @@ function World:checkWinningConditions(player_no)
         result.state = "nothing"
       end
       if max_min == 1 then
-        result.score = math.min(math.abs(current_value / goal.win_value), 200) + result.score
+        result.score = math.min(math.abs(current_value / goal.win_value), 1) + result.score
       else
-        result.score = math.min(math.abs(goal.win_value / current_value), 200) + result.score
+        result.score = math.min(math.abs(goal.win_value / current_value), 1) + result.score
       end
     end
   end
@@ -1541,9 +1541,10 @@ function World:onEndYear()
     {upper = 1.50, value = 1.62},
     {upper = 1.75, value = 1.62},
                 {value = 1.65}
+  }
   for i, _ in ipairs(self.hospitals) do
     local res = self:checkWinningConditions(i)
-    self.hospitals[i].player_salary = self.hospitals.player_salary * rangeMapLookup(res.score, score_salary_inc)
+    self.hospitals[i].player_salary = math.floor(self.hospitals[i].player_salary * rangeMapLookup(res.score, score_salary_inc))
   end
   -- It is crucial that the annual report gets to initialize before onEndYear is called.
   -- Yearly statistics are reset there.
