@@ -401,7 +401,8 @@ function Staff:die()
     window:updateStaffList(self)
   end
   -- It may be that the staff member was fired just before dying (then self.hospital = nil)
-  self.world.ui.hospital:humanoidDeath(self)
+  -- Don't call humanoidDeath as staff don't count to statistics
+  self.world.ui.hospital:changeReputation("death")
 end
 
 -- Despawns the staff member and removes them from the hospital

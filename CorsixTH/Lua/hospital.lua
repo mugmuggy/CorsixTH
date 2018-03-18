@@ -304,6 +304,9 @@ function Hospital:msgKilled()
       self.world.ui.adviser:say(_A.level_progress.another_patient_killed:format(self.num_deaths))
       self.msg_counter = 0
     end
+  else
+    -- only called on 1st dying patient
+    self.world.ui.adviser:say(_A.information.first_death)
   end
 end
 
