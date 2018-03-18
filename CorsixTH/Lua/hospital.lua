@@ -1076,20 +1076,6 @@ function Hospital:onEndMonth()
     self:spendMoney(math.round(self.acc_research_cost), _S.transactions.research)
     self.acc_research_cost = 0
   end
-  -- add to score each month
-  -- rate varies on some performance factors i.e. reputation above 500 increases the score
-  -- and the number of deaths will reduce the score.
-  local sal_inc = self.salary_incr / 10
-  local sal_mult = (self.reputation - 500) / (self.num_deaths + 1) -- added 1 so that you don't divide by 0
-  local month_incr = sal_inc + sal_mult
-  -- To ensure that you can't receive less than 50 or
-  -- more than 300 per month
-  if month_incr < self.sal_min then
-    month_incr = self.sal_min
-  elseif month_incr > self.salary_incr then
-    month_incr = self.salary_incr
-  end
-  self.player_salary = self.player_salary + math.ceil(month_incr)
 
   -- TODO: do you get interest on the balance owed?
   for i, company in ipairs(self.insurance_balance) do
@@ -1177,15 +1163,6 @@ function Hospital:onEndYear()
   self.num_vips_ty  = 0
   self.num_deaths_this_year = 0
   self:checkReputation()
-
-  -- On third year of level 3 there is the large increase to salary
-  -- this will replicate that. I have still to check other levels above 5 to
-  -- see if there are other large increases.
-  -- TODO Hall of fame and shame
-  if self.world:date():year() == 3 and self.world.map.level_number == 3 then
-    -- adds the extra to salary in level 3 year 3
-    self.player_salary = self.player_salary + math.random(8000,20000)
-  end
 end
 
 -- Creates complete emergency with patients, what disease they have, what's needed
