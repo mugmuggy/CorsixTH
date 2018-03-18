@@ -1875,10 +1875,8 @@ function Hospital:updateNotCuredCounts(patient, reason)
 end
 
 function Hospital:updatePercentages()
-  local killed = self.num_deaths / (self.num_cured + self.num_deaths) * 100
-  self.percentage_killed = math.round(killed)
-  local cured = self.num_cured / (self.num_cured + self.not_cured + self.num_deaths) * 100
-  self.percentage_cured = math.round(cured)
+  self.percentage_killed = math.round(self.num_deaths / self.num_visitors * 100)
+  self.percentage_cured = math.round(self.num_cured / self.num_visitors * 100)
 end
 
 --! Compute average of an attribute for all patients in the hospital.
