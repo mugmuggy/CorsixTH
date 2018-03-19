@@ -1161,15 +1161,15 @@ end
 function World:onEndMonth()
   -- Check if a player has won the level if the year hasn't ended, if it has the
   -- annual report window will perform this check when it has been closed.
-
+  local local_hospital = self:getLocalPlayerHospital()
   -- TODO.... this is a step closer to the way TH would check.
   -- What is missing is that if offer is declined then the next check should be
   -- either 6 months later or at the end of month 12 and then every 6 months
   if self.game_date:monthOfYear() % 3 == 0 and self.game_date:monthOfYear() < 12 then
+    local_hospital:updateHospitalValue()
     self:checkIfGameWon()
   end
 
-  local local_hospital = self:getLocalPlayerHospital()
   local_hospital.population = 0.25
   if self.game_date:monthOfGame() >= self.map.level_config.gbv.AllocDelay then
     local_hospital.population = local_hospital.population * self:getReputationImpact(local_hospital)
@@ -1333,7 +1333,8 @@ end
 
 
 --! Checks if all goals have been achieved or if the player has lost.
---! Returns a table that always contains a state string ("win", "lose" or "nothing").
+--! Returns a table that always contains a state string ("win", "lose" or "nothing")
+--! and a score of progression through win criteria.
 --! If the state is "lose", the table also contains a reason string,
 --! which corresponds to the criterion name the player lost to
 --! (reputation, balance, percentage_killed) and a number limit which
@@ -1544,9 +1545,10 @@ function World:onEndYear()
                 {value = 1.65}
   }
 
-  for i, _ in ipairs(self.hospitals) do
+  for i, hosp in ipairs(self.hospitals) do
+    hosp:updateHospitalValue()
     local res = self:checkWinningConditions(i)
-    self.hospitals[i].player_salary = math.floor(self.hospitals[i].player_salary * rangeMapLookup(res.score, score_salary_inc))
+    hosp.player_salary = math.floor(hosp.player_salary * rangeMapLookup(res.score, score_salary_inc))
   end
   -- It is crucial that the annual report gets to initialize before onEndYear is called.
   -- Yearly statistics are reset there.

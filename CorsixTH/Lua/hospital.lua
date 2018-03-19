@@ -1498,9 +1498,6 @@ function Hospital:spendMoney(amount, reason, changeValue)
     self.balance = self.balance - amount
     self:logTransaction({spend = amount, desc = reason})
     self.money_out = self.money_out + amount
-    if changeValue then
-      self.value = self.value + changeValue
-    end
   end
 end
 
@@ -1516,10 +1513,55 @@ function Hospital:receiveMoney(amount, reason, changeValue)
     self.balance = self.balance + amount
     self:logTransaction({receive = amount, desc = reason})
     self.money_in = self.money_in + amount
-    if changeValue then
-      self.value = self.value - changeValue
+  end
+end
+
+--! Calculates hospital value
+function Hospital:updateHospitalValue()
+  local tile_count_value = 0
+  for _, plot_number in pairs(self.ownedPlots) do
+    tile_count_value = tile_count_value + self.world.map:getParcelPrice(plot_number)
+  end
+
+  -- 1000 value per 50 repuation points
+  local reputation_value = math.floor(self.reputation / 50) * 1000
+
+  local room_build_cost = 0
+  local cfg_rooms = self.world.map.level_config.rooms
+  for _, room in pairs(self.world.rooms) do
+    if room.hospital == self then
+      room_build_cost = room_build_cost + cfg_rooms[room.room_info.level_config_id].Cost
     end
   end
+
+  local object_rebuild_cost = 0
+  local cfg_objects = self.world.map.level_config.objects
+  -- just for demonstration purposes before a commit of all of the objects
+  local account_for_object = {desk = true, bed = true, inflator = true, pool_table = true,
+    cardiogram = true, scanner = true, console = true, screen = true, couch = true,
+    sofa = true, crash_trolley = true, tv = true, ultrascanner = true, dna_fixer = true,
+    cast_remover = true, hair_restorer = true, slicer = true, x_ray = true,
+    radiation_shield = true, x_ray_viewer = true, operating_table = true, op_sink1 = true,
+    op_sink2 = true, surgeon_screen = true, lecture_chair = true, projector = true,
+    pharmacy_cabinet = true, computer = true, analyser = true, blood_machine = true,
+    electrolyser = true, jelly_moulder = true, shower = true, autopsy = true,
+    bookcase = true, video_game = true, skeleton = true, comfortable_chair = true}
+
+  -- not all objects account to value
+  local object_type
+  for _, objects in pairs(self.world.objects) do
+    for _, obj in ipairs(objects) do
+      object_type = obj.object_type
+      if account_for_object[object_type.id] then
+        if obj.object_type.research_category then
+          object_rebuild_cost = object_rebuild_cost + self.research.research_progress[TheApp.objects[object_type.id]].cost
+        else
+          object_rebuild_cost = object_rebuild_cost + cfg_objects[object_type.thob].StartCost
+        end
+      end
+    end
+  end
+  self.value = tile_count_value + reputation_value + room_build_cost + object_rebuild_cost + 10000
 end
 
 --[[ Determines how much the player should receive after a patient is treated in a room.
