@@ -203,8 +203,16 @@ static int l_randomseed(lua_State *L)
 int luaopen_random(lua_State *L)
 {
     lua_getglobal(L, "math");
+    lua_pushliteral(L, "lua_random");
+    lua_pushliteral(L, "random");
+    lua_gettable(L, -3);
+    lua_settable(L, -3);
     lua_pushliteral(L, "random");
     lua_pushcfunction(L, l_random);
+    lua_settable(L, -3);
+    lua_pushliteral(L, "lua_randomseed");
+    lua_pushliteral(L, "randomseed");
+    lua_gettable(L, -3);
     lua_settable(L, -3);
     lua_pushliteral(L, "randomseed");
     lua_pushcfunction(L, l_randomseed);
