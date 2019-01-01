@@ -696,7 +696,6 @@ local function tryMovePatient(old_room, new_room, patient)
   -- Update the queues
   local old_queue = old_room.door.queue
   old_queue:removeValue(patient)
-  patient.next_room_to_visit = new_room
   new_room.door.queue:expect(patient)
   new_room.door:updateDynamicInfo()
 
@@ -712,7 +711,10 @@ local function tryMovePatient(old_room, new_room, patient)
     if action.name == 'queue' then
       action.is_in_queue = false
     elseif action.name == "walk" and action.x == old_x and action.y == old_y then
-      patient:queueAction(new_room:createEnterAction(patient), i)
+      -- insert this action in the index of the old walk action
+      -- otherwise when the old action is interrupted upon startAction
+      -- it will unexpect the patient from the new destination room
+      patient:queueAction(new_room:createEnterAction(patient), i - 1)
       break
     end
   end
@@ -723,6 +725,10 @@ local function tryMovePatient(old_room, new_room, patient)
     interrupted.on_interrupt = nil
     on_interrupt(interrupted, patient, false)
   end
+  -- patient could be walking to a bench or idle tile
+  -- meaning the above interruption could unexpect the patient early
+  -- if we don't do this later
+  patient.next_room_to_visit = new_room
   return false
 end
 
