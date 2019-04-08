@@ -284,6 +284,11 @@ navigateDoor = function(humanoid, x1, y1, dir)
       humanoid:setTilePositionSpeed(x1, y1)
       humanoid:setNextAction(IdleAction():setCount(10), 0)
       humanoid:queueAction(MeanderAction())
+      door.reserved_for = nil
+      if door.queue:size() > 0 then
+        door.queue:pop()
+        door:updateDynamicInfo()
+      end
       return
     end
   end
