@@ -987,7 +987,9 @@ function World:onTick()
       end
     end
     if self.game_date == Date() and not self.ui.start_tutorial then
-      self.ui:addWindow(UIWatch(self.ui, "initial_opening"))
+	  if type(self.ui.app.world.map.level_number) == "number" and self.ui.app.world.map.level_number ~= 13 then
+        self.ui:addWindow(UIWatch(self.ui, "initial_opening"))
+	  end
       self.ui:showBriefing()
     end
     self.tick_timer = self.tick_rate

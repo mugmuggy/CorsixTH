@@ -145,6 +145,97 @@ bool basic_pathfinder::find_path(const level_map *pMap, int iStartX, int iStartY
     return false;
 }
 
+int rat_pathfinder::guess_distance(path_node *pNode)
+{
+    // As diagonal movement is allowed for rats
+    return math.sqrt((math.pow(pNode->x - destination_x, 2)) + math.pow(pNode->y - destination_y, 2));
+}
+
+bool rat_pathfinder::try_node(path_node *pNode, map_tile_flags flags,
+                         path_node *pNeighbour, travel_direction direction)
+{
+    map_tile_flags neighbour_flags = map->get_tile_unchecked(pNeighbour->x, pNeighbour->y)->flags;
+    record_neighbour_if_passable(pNode, neighbour_flags, flags.passable, pNeighbour);
+    return false;
+}
+
+bool rat_pathfinder::find_path(const level_map *pMap, int iStartX, int iStartY, int iEndX, int iEndY)
+{
+    if(pMap == nullptr)
+        pMap = parent->default_map;
+    if(pMap == nullptr || pMap->get_tile(iEndX, iEndY) == nullptr
+        || !pMap->get_tile_unchecked(iEndX, iEndY)->flags.passable)
+    {
+        parent->destination = nullptr;
+        return false;
+    }
+
+    map = pMap;
+    destination_x = iEndX;
+    destination_y = iEndY;
+
+    path_node *pNode = init(pMap, iStartX, iStartY);
+    int iWidth = pMap->get_width();
+    path_node *pTarget = parent->nodes + iEndY * iWidth + iEndX;
+
+    while(true)
+    {
+        if(pNode == pTarget)
+        {
+            parent->destination = pTarget;
+            return true;
+        }
+
+        map_tile_flags flags = pMap->get_tile_unchecked(pNode->x, pNode->y)->flags;
+        if (search_neighbours(pNode, flags, iWidth)) return true;
+
+        if (parent->open_heap.empty()) {
+            parent->destination = nullptr;
+            break;
+        } else {
+            pNode = parent->pop_from_open_heap();
+        }
+    }
+    return false;
+}
+
+/*! No need to check for the node being on the map edge, as the N/E/S/W
+    flags are set as to prevent travelling off the map (as well as to
+    prevent walking through walls).
+ */
+bool rat_pathfinder::search_neighbours(path_node *pNode, map_tile_flags flags, int iWidth)
+{
+    if(flags.can_travel_w)
+        if(try_node(pNode, flags, pNode - 1, travel_direction::west)) return true;
+
+    if(flags.can_travel_e)
+        if (try_node(pNode, flags, pNode + 1, travel_direction::east)) return true;
+
+    if(flags.can_travel_n)
+        if (try_node(pNode, flags, pNode - iWidth, travel_direction::north)) return true;
+
+    if(flags.can_travel_s)
+        if (try_node(pNode, flags, pNode + iWidth, travel_direction::south)) return true;
+	
+	// need to add nw, ne, sw, se - technically this requires checking the destination cell as well maybe
+	
+	if(flags.can_travel_n && flags.can_travel_w)
+		if(try_node(pNode, flags, pNode - iWidth - 1, travel_direction::northwest)) return true;
+
+	if(flags.can_travel_n && flags.can_travel_e)
+		if(try_node(pNode, flags, pNode - iWidth + 1, travel_direction::northeast)) return true;
+	
+	if(flags.can_travel_s && flags.can_travel_w)
+		if(try_node(pNode, flags, pNode + iWidth - 1, travel_direction::southwest)) return true;
+
+	if(flags.can_travel_s && flags.can_travel_e)
+		if(try_node(pNode, flags, pNode + iWidth + 1, travel_direction::southeast)) return true;
+
+
+
+    return false;
+}
+
 int hospital_finder::guess_distance(path_node *pNode)
 {
     return 0;

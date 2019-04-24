@@ -55,10 +55,15 @@ function GameUI:GameUI(app, local_hospital, map_editor)
     self.map_editor = UIMapEditor(self)
     self:addWindow(self.map_editor)
   else
-    self.adviser = UIAdviser(self)
-    self.bottom_panel = UIBottomPanel(self)
-    self.bottom_panel:addWindow(self.adviser)
-    self:addWindow(self.bottom_panel)
+    local level = self.app.world.map.level_number
+	self.adviser = UIAdviser(self)
+    if type(level) == "number" and level == 13 then
+	  self.bottom_panel = UIMiniGame(self)
+	else
+      self.bottom_panel = UIBottomPanel(self)
+	end
+	self.bottom_panel:addWindow(self.adviser)
+	self:addWindow(self.bottom_panel)
   end
 
   -- UI widgets

@@ -767,7 +767,7 @@ function UIMenuBar:makeGameMenu(app)
     end
   end
   local levels_menu = UIMenu()
-  for L = 1, 12 do
+  for L = 1, 13 do
     levels_menu:appendItem(("  L%i  "):format(L), function()
       local status, err = pcall(app.loadLevel, app, L)
       if not status then

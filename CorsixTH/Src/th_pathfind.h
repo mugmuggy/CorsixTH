@@ -33,7 +33,12 @@ enum class travel_direction {
     north = 0, ///< Move to the north.
     east = 1, ///< Move to the east.
     south = 2, ///< Move to the south.
-    west = 3 ///< Move to the west.
+    west = 3, ///< Move to the west.
+	// for rat movements
+	northwest = 4, ///< Move to the northwest
+	northeast = 5, ///< Move to the northeast
+	southwest = 6, ///< Move to the southwest
+	southeast = 7, ///< Move to the southeast
 };
 
 /** Node in the path finder routines. */
@@ -138,11 +143,28 @@ public:
     bool try_node(path_node *pNode, map_tile_flags flags,
             path_node *pNeighbour, travel_direction direction) override;
 
+
     bool find_path(const level_map *pMap, int iStartX, int iStartY, int iEndX, int iEndY);
 
     int destination_x; ///< X coordinate of the destination of the path.
     int destination_y; ///< Y coordinate of the destination of the path.
 };
+
+class rat_pathfinder: public abstract_pathfinder
+{
+public:
+    rat_pathfinder(pathfinder* pf) : abstract_pathfinder(pf) { }
+
+    int guess_distance(path_node *pNode) override;
+    bool try_node(path_node *pNode, map_tile_flags flags,
+        path_node *pNeighbour, travel_direction direction) override;
+    bool search_neighbours(path_node *pNode, map_tile_flags flags, int iWidth) override;
+
+	// these may optimise to a float, to deal with animations
+    bool find_path(const level_map *pMap, int iStartX, int iStartY, int iEndX, int iEndY);
+    int destination_x; ///< X coordinate of the destination of the path.
+    int destination_y; ///< Y coordinate of the destination of the path.
+}
 
 class hospital_finder : public abstract_pathfinder
 {
