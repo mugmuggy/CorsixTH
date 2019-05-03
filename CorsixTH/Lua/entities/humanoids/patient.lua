@@ -343,6 +343,11 @@ function Patient:die()
   if self.is_emergency then
     hospital.emergency.killed_emergency_patients = hospital.emergency.killed_emergency_patients + 1
   end
+
+  -- prevent callbacks aborting the die actions and clean up remaining faxes
+  self:unregisterCallbacks()
+  TheApp.ui.bottom_panel:removeMessage(self)
+
   self:queueAction(DieAction())
   self:updateDynamicInfo(_S.dynamic_info.patient.actions.dying)
 end
