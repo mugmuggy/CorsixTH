@@ -23,6 +23,8 @@ class "SeekReceptionAction" (HumanoidAction)
 ---@type SeekReceptionAction
 local SeekReceptionAction = _G["SeekReceptionAction"]
 
+local can_use_queue_distance = 6
+
 function SeekReceptionAction:SeekReceptionAction()
   self:HumanoidAction("seek_reception")
 end
@@ -69,13 +71,14 @@ local function action_seek_reception_start(action, humanoid)
     local orientation = best_desk.object_type.orientations[best_desk.direction]
     local x = best_desk.tile_x + orientation.use_position[1]
     local y = best_desk.tile_y + orientation.use_position[2]
+    local dist = humanoid.world:getPathDistance(humanoid.tile_x, humanoid.tile_y, x, y)
     humanoid:updateDynamicInfo(_S.dynamic_info.patient.actions.on_my_way_to
       :format(best_desk.object_type.name))
     humanoid.waiting = nil
 
     -- We don't want patients which have just spawned to be joining the queue
     -- immediately, so walk them closer to the desk before joining the queue
-    if can_join_queue_at(humanoid, humanoid.tile_x, humanoid.tile_y) then
+    if can_join_queue_at(humanoid, humanoid.tile_x, humanoid.tile_y) and dist < can_use_queue_distance then
       local face_x, face_y = best_desk:getSecondaryUsageTile()
       humanoid:setNextAction(QueueAction(x, y, best_desk.queue):setMustHappen(action.must_happen)
           :setFaceDirection(face_x, face_y))
@@ -85,7 +88,7 @@ local function action_seek_reception_start(action, humanoid)
 
       -- Trim the walk to finish once it is possible to join the queue
       for i = #walk.path_x, 2, -1 do
-        if can_join_queue_at(humanoid, walk.path_x[i], walk.path_y[i]) then
+        if can_join_queue_at(humanoid, walk.path_x[i], walk.path_y[i]) and dist - i < can_use_queue_distance then
           walk.path_x[i + 1] = nil
           walk.path_y[i + 1] = nil
         else
