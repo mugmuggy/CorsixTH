@@ -96,20 +96,8 @@ function UIBuildRoom:UIBuildRoom(ui)
     _S.room_classes.clinics,
     _S.room_classes.facilities
   }
-  self.category_rooms = {
-  }
-  for i, category in ipairs({"diagnosis", "treatment", "clinics", "facilities"}) do
-    local rooms = {}
-    self.category_rooms[i] = rooms
-    for _, room in ipairs(app.world.available_rooms) do
-      -- NB: Unimplemented rooms are hidden unless in debug mode
-      if (app.config.debug or room.class) and room.categories[category] and
-          ui.hospital.discovered_rooms[room] then
-        rooms[#rooms + 1] = room
-      end
-    end
-    table.sort(rooms, function(r1, r2) return r1.categories[category] < r2.categories[category] end)
-  end
+  self.category_rooms = {}
+  self:updateList(true)
 
   self:makeTooltip(_S.tooltip.build_room_window.cost, 160, 228, 282, 242)
 end
@@ -118,6 +106,10 @@ local cat_label_y = {21, 53, 84, 116}
 
 function UIBuildRoom:draw(canvas, x, y)
   Window.draw(self, canvas, x, y)
+
+  if self:setList() then
+    self:enableButtons()
+  end
 
   x, y = self.x + x, self.y + y
   self.white_font:draw(canvas, self.list_title, x + 163, y + 18)
@@ -144,10 +136,16 @@ function UIBuildRoom:setCategory(index)
   else
     self.ui:tutorialStep(3, 3, 2)
   end
-  self.category_index = index
-  self.list_title = _S.build_room_window.pick_room_type
-  self.list = self.category_rooms[index]
+  if self.category_index ~= index then
+    self.category_index = index
+    self:updateList()
+    self.list_title = _S.build_room_window.pick_room_type
+    self.list = self.category_rooms[index]
+    self:enableButtons()
+  end
+end
 
+function UIBuildRoom:enableButtons()
   local last = #self.list + 5
   for i = 5, 14 do
     self.buttons[i].enabled = i < last
@@ -220,4 +218,56 @@ end
 function UIBuildRoom:close()
   self.ui:tutorialStep(3, {2, 3}, 1)
   return Window.close(self)
+end
+
+function UIBuildRoom:updateList(initial)
+  for i, category in ipairs({"diagnosis", "treatment", "clinics", "facilities"}) do
+    -- only do it for the currently displayed category
+    if self.category_index == i or initial then
+      local rooms = {}
+      self.category_rooms[i] = rooms
+      for _, room in ipairs(self.ui.app.world.available_rooms) do
+        -- NB: Unimplemented rooms are hidden unless in debug mode
+        if (self.ui.app.config.debug or room.class) and room.categories[category] and
+            self.ui.hospital.discovered_rooms[room] then
+          rooms[#rooms + 1] = room
+        end
+      end
+      table.sort(rooms, function(r1, r2) return r1.categories[category] < r2.categories[category] end)
+      -- if we are just changing categories, then we want to abort the loop
+      if not initial then
+        break
+      end
+    end
+  end
+end
+
+-- append new rooms at the end of the current category so the list doesn't change whilst a selection is about to be confirmed
+function UIBuildRoom:setList()
+  for i, category in ipairs({"diagnosis", "treatment", "clinics", "facilities"}) do
+    -- only do it for the currently displayed category
+    if self.category_index == i then
+      for _, room in ipairs(self.ui.app.world.available_rooms) do
+        -- NB: Unimplemented rooms are hidden unless in debug mode
+        if (self.ui.app.config.debug or room.class) and room.categories[category] and
+            self.ui.hospital.discovered_rooms[room] then
+          local rooms = self.category_rooms[i]
+          local found = false
+          for _, rm in ipairs(rooms) do
+            if rm == room then
+              found = true
+              break
+            end
+          end
+          if not found then
+            rooms[#rooms + 1] = room
+            -- as its just as unlikely to discover two rooms in the same UI update
+            -- we can just exit indicating we need to update the buttons
+            return true
+          end
+        end
+      end
+      break
+    end
+  end
 end
