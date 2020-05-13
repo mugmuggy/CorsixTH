@@ -643,10 +643,82 @@ function GameUI:onMouseUp(code, x, y)
     else -- No room chosen yet, but about to edit one.
       if button == "left" then -- Take the clicked one.
         local room = self.app.world:getRoom(self:ScreenToWorld(x, y))
-        if room and not room.crashed then
-          self:setCursor(self.waiting_cursor)
-          self.edit_room = room
-          room:tryToEdit()
+        if room then
+          if not room.crashed then
+            self:setCursor(self.waiting_cursor)
+            self.edit_room = room
+            room:tryToEdit()
+          else
+            if self.app.config.remove_destroyed_rooms then
+              local room_cost = room:calculateRemovalCost()
+              self:setEditRoom(false)
+              -- show confirmation dialog for removing the room
+              self:addWindow(UIConfirmDialog(self,_S.confirmation.remove_destroyed_room:format(room_cost),
+              --[[persistable:remove_destroyed_room_confirm_dialog]]function()
+                local world = room.world
+                -- remove all objects, issue with door getting soot and removig the door only
+                for x = room.x, room.x + room.width - 1 do
+                  for y = room.y, room.y + room.height - 1 do
+                    while true do
+                      -- get litter then any other object
+                      local obj = room.world:getObject(x, y, 'litter') or room.world:getObject(x, y)
+                      -- but we need to ignore doors
+                      if not obj or class.is(obj, Door) then break end
+                      if obj.object_type.id == 'litter' then
+                        obj:remove()
+                      else
+                        print(obj.tile_x, obj.tile_y, obj.object_type.id)
+                        world:destroyEntity(obj)
+                      end
+                    end
+                  end
+                end
+                -- remove doors separately as they might not be on the room tiles
+                if room.door2 then
+                  world:destroyEntity(room.door2)
+                end
+                world:destroyEntity(room.door)
+
+                local map = self.app.map.th
+                -- remove room entirely
+                local function remove_wall_line(x, y, step_x, step_y, n_steps, layer, neigh_x, neigh_y)
+                  for _ = 1, n_steps do
+                    local existing = map:getCell(x, y, layer)
+                    -- Possibly add transparency.
+                    local flag = 0
+                    if self.transparent_walls then
+                      flag = 1024
+                    end
+                    if world:getWallIdFromBlockId(existing) ~= "external" then
+                      local neighbour = room.world:getRoom(x + neigh_x, y + neigh_y)
+                      if neighbour then
+                        if neigh_x ~= 0 or neigh_y ~= 0 then
+                          local set = world:getWallSetFromBlockId(existing)
+                          local dir = world:getWallDirFromBlockId(existing)
+                          if set == "inside_tiles" then
+                            set = "outside_tiles"
+                          end
+                          map:setCell(x, y, layer, flag + world.wall_types[neighbour.room_info.wall_type][set][dir])
+                        end
+                      else
+                        map:setCell(x, y, layer, flag)
+                      end
+                    end
+                    x = x + step_x
+                    y = y + step_y
+                  end
+                end
+                remove_wall_line(room.x, room.y, 0, 1, room.height, 3, -1,  0)
+                remove_wall_line(room.x, room.y, 1, 0, room.width , 2,  0, -1)
+                remove_wall_line(room.x + room.width, room.y , 0, 1, room.height, 3, 0, 0)
+                remove_wall_line(room.x, room.y + room.height, 1, 0, room.width , 2, 0, 0)
+                map:unmarkRoom(room.x, room.y, room.width, room.height)
+                world.rooms[room.id] = nil
+                self.hospital:spendMoney(room_cost, _S.transactions.sell_object, value_change)
+                end
+              ))
+            end
+          end
         end
       else -- right click, we don't want to edit a room after all.
         self:setEditRoom(false)

@@ -120,6 +120,7 @@ local config_defaults = {
   alien_dna_can_knock_on_doors = false,
   disable_fractured_bones_females = true,
   enable_avg_contents = false,
+  remove_destroyed_rooms = false,
   audio_frequency = 22050,
   audio_channels = 2,
   audio_buffer_size = 2048,
@@ -172,9 +173,7 @@ else
 end
 
 if needs_rewrite then
-  fi = io.open(config_filename, "w")
-  if fi then
-    fi:write([=[
+  local string_01 = [=[
 ----------------------------------------- CorsixTH configuration file -------------------------------------------
 -- Lines starting with two dashes (like this one) are ignored.
 -- Text settings should have their values between double square braces, e.g.
@@ -361,6 +360,14 @@ if needs_rewrite then
 -- ]=] .. '\n' ..
 'enable_avg_contents = ' .. tostring(config_values.enable_avg_contents) .. '\n' .. [=[
 
+-------------------------------------------------------------------------------------------------------------------------
+-- By default destroyed rooms can't be removed.
+-- If you would like the game to give you the option of removing a destroyed room change this option to true.
+-- ]=] .. '\n' ..
+'remove_destroyed_rooms = ' .. tostring(config_values.remove_destroyed_rooms) .. '\n' .. [=[]=]
+
+local string_02 = [=[
+
 ----------------------------------------------- FOLDER SETTINGS ----------------------------------------------
 -- These settings can also be changed from the Folders Menu
 -------------------------------------------------------------------------------------------------------------------------
@@ -497,7 +504,10 @@ audio_music = nil -- [[X:\ThemeHospital\Music]]
 -- you play the game.
 -------------------------------------------------------------------------------------------------------------------------
 
-]=])
+]=]
+  fi = io.open(config_filename, "w")
+  if fi then
+    fi:write(string_01 .. string_02)
     fi:close()
   end
 end

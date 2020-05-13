@@ -2377,3 +2377,11 @@ function Hospital:notifyOfStaffChange(staff)
     patient:notifyOfStaffChange(staff)
   end
 end
+
+--[[ Change the hospital value by an amount independent of a cost being incurred.
+
+!param changeValue (integer) The amount the hospital value should be change
+]]
+function Hospital:changeValue(changeValue)
+  self.value = self.value + changeValue
+end

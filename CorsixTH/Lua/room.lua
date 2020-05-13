@@ -864,7 +864,9 @@ function Room:crashRoom()
   end
 
   self.hospital.num_explosions = self.hospital.num_explosions + 1
-
+  local value_change = self.hospital.research.research_progress[self.room_info].build_cost
+  self.hospital:changeValue(value_change * -1)
+  self.hospital:changeReputation("room_crash")
   self.crashed = true
   self:deactivate()
 end
@@ -1029,4 +1031,21 @@ function Room:getStaffServiceQuality()
   end
 
   return quality
+end
+
+--! Get the removal cost
+--!return (integer) cost of the room
+function Room:calculateRemovalCost()
+    -- Charge double to clean it up
+    local progress = self.hospital.research.research_progress
+    local cost = math.floor(progress[self.room_info].build_cost * 2)
+
+    -- Recover some cost as scrap
+    for obj, num in pairs(self.room_info.objects_needed) do
+      -- Get how much this item costs.
+      local obj_cost = self.hospital:getObjectBuildCost(obj)
+      -- recover 20% of cost as scrap value
+      cost = cost - math.floor(obj_cost * 0.2)
+    end
+    return cost
 end
