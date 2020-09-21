@@ -51,12 +51,12 @@ function Cheats:Cheats(ui)
   }
 end
 
-function Cheats:announceCheat()
-  local announcements = self.ui.app.world.cheat_announcements
+function Cheats.announceCheat(ui)
+  local announcements = ui.app.world.cheat_announcements
   if announcements then
-    self.ui:playAnnouncement(announcements[math.random(1, #announcements)], AnnouncementPriority.Critical)
+    ui:playAnnouncement(announcements[math.random(1, #announcements)], AnnouncementPriority.Critical)
   end
-  self.ui.hospital.cheated = true
+  ui.hospital.cheated = true
 end
 
 function Cheats:cheatMoney()

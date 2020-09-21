@@ -283,8 +283,7 @@ end
 
 function UIFax:cheatByFax()
   local cheatWindow = self.ui:getWindow(UICheats)
-  local cheat = self.ui.hospital.hosp_cheats
-  cheat:announceCheat()
+  Cheats.announceCheat(self.ui)
   -- If a cheats window is open, make sure the UI is updated
   if cheatWindow then
     cheatWindow:updateCheatedStatus()
