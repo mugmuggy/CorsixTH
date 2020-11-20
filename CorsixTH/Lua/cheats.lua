@@ -64,7 +64,7 @@ end
 function Cheats:announceCheat()
   local announcements = self.hospital.world.cheat_announcements
   if announcements then
-    self.hospital.world.ui:playAnnouncement(announcements[math.random(1, #announcements)], AnnouncementPriority.Critical)
+    self.hospital.world.ui:playAnnouncement(announcements[math.lrandom(1, #announcements)], AnnouncementPriority.Critical)
   end
   self.hospital.cheated = true
 end

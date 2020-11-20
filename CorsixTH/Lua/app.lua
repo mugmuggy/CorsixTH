@@ -203,6 +203,7 @@ function App:init()
   -- App initialisation 2nd goal: Load remaining systems and data in an appropriate order
 
   math.randomseed(os.time() + SDL.getTicks())
+  math.lrandomseed(os.time() + SDL.getTicks())
   -- Add math.n_random globally. It generates pseudo random normally distributed
   -- numbers using the Box-Muller transform.
   strict_declare_global "math.n_random"

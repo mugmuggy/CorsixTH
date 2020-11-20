@@ -240,9 +240,9 @@ function GameUI:draw(canvas)
   end
   local zoom = self.zoom_factor
   local dx = self.screen_offset_x +
-      math.floor((0.5 - math.random()) * self.shake_screen_intensity * shake_screen_max_movement * 2)
+      math.floor((0.5 - math.lrandom()) * self.shake_screen_intensity * shake_screen_max_movement * 2)
   local dy = self.screen_offset_y +
-      math.floor((0.5 - math.random()) * self.shake_screen_intensity * shake_screen_max_movement * 2)
+      math.floor((0.5 - math.lrandom()) * self.shake_screen_intensity * shake_screen_max_movement * 2)
   if canvas:scale(zoom) then
     app.map:draw(canvas, dx, dy, math.floor(config.width / zoom), math.floor(config.height / zoom), 0, 0)
     canvas:scale(1)
@@ -387,7 +387,7 @@ function GameUI:makeDebugFax()
   }
   -- Don't use "strike" type here, as these open a different window and must have an owner
   local types = {"emergency", "epidemy", "personality", "information", "disease", "report"}
-  self.bottom_panel:queueMessage(types[math.random(1, #types)], message)
+  self.bottom_panel:queueMessage(types[math.lrandom(1, #types)], message)
 end
 
 function GameUI:ScreenToWorld(x, y)

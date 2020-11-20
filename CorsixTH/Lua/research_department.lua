@@ -374,8 +374,10 @@ function ResearchDepartment:addResearchPoints(points, autopsy_room)
 
     -- Divide the points into the different categories and check if
     -- it is time to discover something
+    local policy = {"cure", "diagnosis", "drugs", "improvements", "specialisation"}
     local areas = self.research_policy
-    for _, info in pairs(areas) do
+    for _, category in ipairs(policy) do
+      local info = self.research_policy[category]
       -- Don't touch the value "global".
       if type(info) == "table" then
         -- Some categories may be finished
