@@ -1003,33 +1003,6 @@ function World:onTick()
       self:tickEarthquake()
     end
 
-    local new_game_date = self.game_date:plusHours(self.hours_per_tick)
-    -- End of day/month/year
-    if self.game_date:dayOfMonth() ~= new_game_date:dayOfMonth() then
-      for _, hospital in ipairs(self.hospitals) do
-        hospital:onEndDay()
-      end
-      self:onEndDay()
-      if self.game_date:isLastDayOfMonth() then
-        for _, hospital in ipairs(self.hospitals) do
-          hospital:onEndMonth()
-        end
-        -- Let the hospitals do what they need to do at end of month first.
-        if self:onEndMonth() then
-          -- Bail out as the game has already been ended.
-          return
-        end
-
-        if self.game_date:isLastDayOfYear() then
-          -- It is crucial that the annual report gets to initialize before onEndYear is called.
-          -- Yearly statistics are reset there.
-          self.ui:addWindow(UIAnnualReport(self.ui, self))
-          self:onEndYear()
-        end
-      end
-    end
-    self.game_date = new_game_date
-
     for i = 1, self.hours_per_tick do
       for _, hospital in ipairs(self.hospitals) do
         hospital:tick()
@@ -1056,6 +1029,34 @@ function World:onTick()
         self.ui:onWorldTick()
       end
       self.dispatcher:onTick()
+
+      -- as the loop ensures we process one tick at a time
+      local new_game_date = self.game_date:plusHours(1)
+      -- End of day/month/year
+      if self.game_date:dayOfMonth() ~= new_game_date:dayOfMonth() then
+        for _, hospital in ipairs(self.hospitals) do
+          hospital:onEndDay()
+        end
+        self:onEndDay()
+        if self.game_date:isLastDayOfMonth() then
+          for _, hospital in ipairs(self.hospitals) do
+            hospital:onEndMonth()
+          end
+          -- Let the hospitals do what they need to do at end of month first.
+          if self:onEndMonth() then
+            -- Bail out as the game has already been ended.
+            return
+          end
+
+          if self.game_date:isLastDayOfYear() then
+            -- It is crucial that the annual report gets to initialize before onEndYear is called.
+            -- Yearly statistics are reset there.
+            self.ui:addWindow(UIAnnualReport(self.ui, self))
+            self:onEndYear()
+          end
+        end
+      end
+      self.game_date = new_game_date
     end
   end
   if self.hours_per_tick > 0 and self.floating_dollars then
