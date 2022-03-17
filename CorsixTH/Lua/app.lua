@@ -852,6 +852,7 @@ function App:saveConfig()
   local fi = io.open(config_file, "r")
   local lines = {}
   local handled_ids = {}
+  local needs_rewrite = false
   if fi then
     for line in fi:lines() do
       lines[#lines + 1] = line
@@ -878,6 +879,7 @@ function App:saveConfig()
               new_value = tostring(new_value)
             end
             lines[#lines] = string.format("%s = %s", identifier, new_value)
+            needs_rewrite = true
           end
         end
       end
@@ -893,6 +895,7 @@ function App:saveConfig()
         value = tostring(value)
       end
       lines[#lines + 1] = string.format("%s = %s", identifier, value)
+      needs_rewrite = true
     end
   end
   -- Trim trailing newlines
@@ -900,11 +903,13 @@ function App:saveConfig()
     lines[#lines] = nil
   end
 
-  fi = self:writeToFileOrTmp(config_file)
-  for _, line in ipairs(lines) do
-    fi:write(line .. "\n")
+  if needs_rewrite then
+    fi = self:writeToFileOrTmp(config_file)
+    for _, line in ipairs(lines) do
+      fi:write(line .. "\n")
+    end
+    fi:close()
   end
-  fi:close()
 end
 
 --! Tries to open the given file or a file in OS's temp dir.
@@ -950,6 +955,7 @@ function App:saveHotkeys()
   local fi = io.open(hotkeys_filename, "r")
   local lines = {}
   local handled_ids = {}
+  local needs_rewrite = false
 
   if fi then
     for line in fi:lines() do
@@ -978,6 +984,7 @@ function App:saveHotkeys()
               new_value = serialize(new_value)
             end
             lines[#lines] = string.format("%s = %s", identifier, new_value)
+            needs_rewrite = true
           end
         end
       end
@@ -994,6 +1001,7 @@ function App:saveHotkeys()
         value = tostring(value)
       end
       lines[#lines + 1] = string.format("%s = %s", identifier, value)
+	  needs_rewrite = true
     end
   end
   -- Trim trailing newlines
@@ -1001,12 +1009,13 @@ function App:saveHotkeys()
     lines[#lines] = nil
   end
 
-  fi = self:writeToFileOrTmp(hotkeys_filename)
-  for _, line in ipairs(lines) do
-    fi:write(line .. "\n")
+  if needs_rewrite then
+    fi = self:writeToFileOrTmp(hotkeys_filename)
+    for _, line in ipairs(lines) do
+      fi:write(line .. "\n")
+    end
+    fi:close()
   end
-
-  fi:close()
 end
 
 function App:run()
