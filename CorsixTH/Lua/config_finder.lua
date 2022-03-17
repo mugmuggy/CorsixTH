@@ -178,7 +178,14 @@ if fi and TheApp then
       ind = string.find(file_contents, "=", ind) + 1
       if type(value) ~= "string" then
         ind = string.find(file_contents, "[%a%d]", ind)
-        config_values[key] = string.sub(file_contents, ind, string.find(file_contents, "[ \n-]", ind + 1) - 1)
+        local str = string.sub(file_contents, ind, string.find(file_contents, "[ \n-]", ind + 1) - 1)
+        if type(value) == "number" then
+          config_values[key] = tonumber(str)
+        elseif str ~= "nil" then
+          config_values[key] = string.sub(file_contents, ind, string.find(file_contents, "[ \n-]", ind + 1) - 1) == "true"
+        elseif str == "nil" then
+          config_values[key] = nil
+        end
       else
         ind = string.find(file_contents, "[", ind + 1, true) + 1
         config_values[key] = string.sub(file_contents, ind + 1, string.find(file_contents, "]", ind, true) - 1)
