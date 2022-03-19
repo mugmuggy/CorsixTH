@@ -852,6 +852,11 @@ function App:saveConfig()
   local fi = io.open(config_file, "r")
   local lines = {}
   local handled_ids = {}
+<<<<<<< Updated upstream
+  local config_modified = false
+=======
+  local needs_rewrite = false
+>>>>>>> Stashed changes
   if fi then
     for line in fi:lines() do
       lines[#lines + 1] = line
@@ -871,6 +876,7 @@ function App:saveConfig()
           -- replace the line, if needed
           handled_ids[identifier] = true
           if value ~= tostring(self.config[identifier]) then
+            config_modified = true
             local new_value = self.config[identifier]
             if type(new_value) == "string" then
               new_value = string.format("[[%s]]", new_value)
@@ -878,6 +884,7 @@ function App:saveConfig()
               new_value = tostring(new_value)
             end
             lines[#lines] = string.format("%s = %s", identifier, new_value)
+            needs_rewrite = true
           end
         end
       end
@@ -887,24 +894,37 @@ function App:saveConfig()
   -- Append options that were not found
   for identifier, value in pairs(self.config) do
     if not handled_ids[identifier] then
+      config_modified = true
       if type(value) == "string" then
         value = string.format("[[%s]]", value)
       else
         value = tostring(value)
       end
       lines[#lines + 1] = string.format("%s = %s", identifier, value)
+      needs_rewrite = true
     end
   end
   -- Trim trailing newlines
   while lines[#lines] == "" do
+    config_modified = true
     lines[#lines] = nil
   end
+
+<<<<<<< Updated upstream
+  if not config_modified then return end
 
   fi = self:writeToFileOrTmp(config_file)
   for _, line in ipairs(lines) do
     fi:write(line .. "\n")
+=======
+  if needs_rewrite then
+    fi = self:writeToFileOrTmp(config_file)
+    for _, line in ipairs(lines) do
+      fi:write(line .. "\n")
+    end
+    fi:close()
+>>>>>>> Stashed changes
   end
-  fi:close()
 end
 
 --! Tries to open the given file or a file in OS's temp dir.
@@ -950,7 +970,12 @@ function App:saveHotkeys()
   local fi = io.open(hotkeys_filename, "r")
   local lines = {}
   local handled_ids = {}
+<<<<<<< Updated upstream
+  local config_modified = false
+=======
+  local needs_rewrite = false
 
+>>>>>>> Stashed changes
   if fi then
     for line in fi:lines() do
       lines[#lines + 1] = line
@@ -971,6 +996,7 @@ function App:saveHotkeys()
           handled_ids[identifier] = true
 
           if value ~= serialize(self.hotkeys[identifier]) then
+            config_modified = true
             local new_value = self.hotkeys[identifier]
             if type(new_value) == "string" then
               new_value = string.format("[[%s]]", new_value)
@@ -978,6 +1004,7 @@ function App:saveHotkeys()
               new_value = serialize(new_value)
             end
             lines[#lines] = string.format("%s = %s", identifier, new_value)
+            needs_rewrite = true
           end
         end
       end
@@ -988,25 +1015,37 @@ function App:saveHotkeys()
   -- Append options that were not found
   for identifier, value in pairs(self.hotkeys) do
     if not handled_ids[identifier] then
+      config_modified = true
       if type(value) == "string" then
         value = string.format("[[%s]]", value)
       else
         value = tostring(value)
       end
       lines[#lines + 1] = string.format("%s = %s", identifier, value)
+	  needs_rewrite = true
     end
   end
   -- Trim trailing newlines
   while lines[#lines] == "" do
+    config_modified = true
     lines[#lines] = nil
   end
+
+<<<<<<< Updated upstream
+  if not config_modified then return end
 
   fi = self:writeToFileOrTmp(hotkeys_filename)
   for _, line in ipairs(lines) do
     fi:write(line .. "\n")
+=======
+  if needs_rewrite then
+    fi = self:writeToFileOrTmp(hotkeys_filename)
+    for _, line in ipairs(lines) do
+      fi:write(line .. "\n")
+    end
+    fi:close()
+>>>>>>> Stashed changes
   end
-
-  fi:close()
 end
 
 function App:run()
