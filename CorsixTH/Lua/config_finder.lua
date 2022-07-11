@@ -140,6 +140,7 @@ local config_defaults = {
   use_new_graphics = false,
   check_for_updates = true,
   room_information_dialogs = true
+  debug_falling = false,
 }
 
 fi = io.open(config_filename, "r")
@@ -457,6 +458,13 @@ audio_music = nil -- [[X:\ThemeHospital\Music]]
 -- and a debug menu will be visible.
 -- ]=] .. '\n' ..
 'debug = ' .. tostring(config_values.debug) .. '\n' .. [=[
+
+-- Experimental setting for falling patients. (debug only!)
+-- CorsixTH does not yet have reliable handling for falling actions and enabling it
+-- could cause dropped action queues or undesired bugs. You should leave this setting
+-- off unless you're developing with it
+-- ]=] .. '\n' ..
+'debug_falling = ' .. tostring(config_values.debug_falling) .. '\n' .. [=[
 
 --Optional settings for CorsixTH's Lua DBGp client.
 --Default settings are nil values, platform & workingdir will be autodected if nil.

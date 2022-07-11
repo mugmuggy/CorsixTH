@@ -72,6 +72,14 @@ function Patient:onClick(ui, button)
         ui:addWindow(UIPatient(ui, self))
       end
     end
+  elseif TheApp.config.debug_falling and button == "right" then
+    -- Attempt to push patient over
+    -- Currently debug-only, enable in config file for testing.
+    -- Once working, the debugging flag can be removed.
+    if not self.world:isPaused() and not (self.cured or self.dead or self.going_home)
+         and math.random(1, 3) == 2 then
+      self:falling(true)
+    end
   elseif self.user_of then
     -- The object we're using is made invisible, as the animation contains both
     -- the humanoid and the object. Hence send the click onto the object.
@@ -337,8 +345,9 @@ function Patient:canPeeOrPuke(current)
       not self.going_home and self.world.map.th:getCellFlags(self.tile_x, self.tile_y).buildable)
 end
 
---! Animations for when there is an earth quake
-function Patient:falling()
+--! Falling animations for when there is an earth quake or the player is being very mean
+--!param player_init (bool) if true, player triggered the fall
+function Patient:falling(player_init)
   local current = self:getCurrentAction()
   current.keep_reserved = true
   if self.falling_anim and self:canPeeOrPuke(current) and self.has_fallen == 1 then
@@ -351,7 +360,7 @@ function Patient:falling()
     else
       self:interruptAndRequeueAction(current, 4)
     end
-    self:fallingAnnounce()
+    if player_init then self:fallingAnnounce(true)
     self:changeAttribute("happiness", -0.05) -- falling makes you very unhappy
   else
     return
