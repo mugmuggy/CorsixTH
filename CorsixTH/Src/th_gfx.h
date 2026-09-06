@@ -79,13 +79,10 @@ enum draw_flags : uint32_t {
   //! Draw the sprite with red and blue colours swapped.
   thdf_alt32_blue_red_swap = 2 << thdf_alt32_start,
 
-  /** Object attached to tile flags **/
-  /* (should be set prior to attaching to a tile) */
-
   //! Attach to the early sprite list (right-to-left pass)
+  /* (should be set prior to attaching to a tile) */
   thdf_early_list = 1 << 10,
-  //! Keep this sprite at the bottom of the attached list
-  thdf_list_bottom = 1 << 11,
+
   //! Hit-test using bounding-box precision rather than pixel-perfect
   thdf_bound_box_hit_test = 1 << 12,
   //! Apply a cropping operation prior to drawing
@@ -323,11 +320,12 @@ class animation_manager {
       @param patient_effect The animation effect to apply to the patient.
       @param patient_effect_offset The number of ticks to offset the effect
           animation by.
+      @param scale_factor
   */
   void draw_frame(render_target* pCanvas, size_t iFrame,
-                  const ::layers& oLayers, int iX, int iY, uint32_t iFlags,
+                  const ::layers& oLayers, float iX, float iY, uint32_t iFlags,
                   animation_effect patient_effect = animation_effect::none,
-                  size_t patient_effect_offset = 0) const;
+                  size_t patient_effect_offset = 0, int scale_factor = 1) const;
 
   void get_frame_extent(size_t iFrame, const ::layers& oLayers, int* pMinX,
                         int* pMaxX, int* pMinY, int* pMaxY,
@@ -483,6 +481,7 @@ class animation_base : public drawable {
   }
   void set_layer(int iLayer, int iId);
   void set_layers_from(const animation_base* pSrc) { layers = pSrc->layers; }
+  void set_scale_factor(int s) { scale_factor = s; }
 
  protected:
   //! Tile containing the animation. A negative x or y means it is not active.
@@ -492,6 +491,17 @@ class animation_base : public drawable {
   xy_pair pixel_offset{0, 0};
 
   ::layers layers{};
+
+  //! Scale factor for the animation.
+  /**
+   * For both animation and sprite_render_list scale_factor is currently only
+   * implemented for drawing. Support for hit_test should be implemented if
+   * a need to hit_test on a scaled sprite_render_list or animation arises.
+   *
+   * In all cases scale_factor is not persisted, and expected to be set
+   * according to the current game options before calling draw.
+   */
+  int scale_factor{1};
 };
 
 //! The kind of animation.
@@ -646,7 +656,7 @@ class sprite_render_list : public animation_base {
   //! Number of ticks until reports as dead (-1 = never dies)
   int lifetime{-1};
   //! Whether to draw to an intermediate buffer. This is used to preserve text
-  //! rendering quality when scaling.
+  //! rendering quality when scaling. Not persisted.
   bool use_intermediate_buffer{false};
 };
 

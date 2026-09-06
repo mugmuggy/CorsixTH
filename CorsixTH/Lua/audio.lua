@@ -41,6 +41,15 @@ function Audio:Audio(app)
   self.played_sound_callbacks = {}
   self.entities_waiting_for_sound_to_be_enabled = {}
   self.midi_player = nil
+  self.allowed_waveform_formats = {
+    "OGG", "OPUS", "FLAC", "WV", "WAV", "WAVE",
+    "MPG", "MPEG", "MP3", "MAD", "AIFF", "AIFC", "AIF"
+  }
+  self.allowed_instructional_formats = {
+    "MID", "MIDI", "KAR", "669", "AMF", "AMS", "DBM",
+    "DSM", "FAR", "GDM", "IT", "MED", "MDL", "MOD", "MOL", "MTM", "NST", "OKT", "PTM",
+    "S3M", "STM", "ULT", "UMX", "WOW", "XM", "XMI"
+  }
 end
 
 function Audio:clearCallbacks()
@@ -97,11 +106,8 @@ function Audio:init()
     - Uses titles from MIDI.TXT if found, else the filename.
   --]]
   local midi_txt -- File name of midi.txt file, if any.
-  local waveform = list_to_set({"OGG", "OPUS", "FLAC", "WV", "WAV", "WAVE",
-      "MPG", "MPEG", "MP3", "MAD", "AIFF", "AIFC", "AIF"})
-  local instructional = list_to_set({"MID", "MIDI", "KAR", "669", "AMF", "AMS", "DBM",
-      "DSM", "FAR", "GDM", "IT", "MED", "MDL", "MOD", "MOL", "MTM", "NST", "OKT", "PTM",
-      "S3M", "STM", "ULT", "UMX", "WOW", "XM", "XMI"})
+  local waveform = list_to_set(self.allowed_waveform_formats)
+  local instructional = list_to_set(self.allowed_instructional_formats)
 
   local _f, _s, _v
   if music_dir then
@@ -175,11 +181,7 @@ function Audio:init()
 
   self:initMidiPlayer()
 
-  local status, err = SDL.audio.init(
-    self.app.config.audio_frequency,
-    self.app.config.audio_channels,
-    self.app.config.audio_buffer_size,
-    self.app:findSoundFont())
+  local status, err = SDL.audio.init(self.app:findSoundFont())
   if not status then
     print("Notice: Audio system could not initialise (SDL error: " .. tostring(err) .. ")")
     self.not_loaded = true
@@ -191,15 +193,21 @@ end
 
 function Audio:initMidiPlayer()
   if self.midi_player then
-    self.midi_player:close()
+    pcall(self.midi_player.close, self.midi_player)
     self.midi_player = nil
   end
 
   if TH.GetCompileOptions().midi_device and self.app.config.midi_api then
-    self.midi_player = TH.midiPlayer(
+    local midi_ok, midi_player = pcall(
+      TH.midiPlayer,
       self.app.config.midi_api,
       self.app.config.midi_port,
       self.app.config.midi_sysex_master_volume)
+    if midi_ok then
+      self.midi_player = midi_player
+    else
+      print("Failed to create midi player: " .. midi_player)
+    end
   end
 end
 
@@ -274,7 +282,8 @@ end
 --! Set the visual area for sound effects playback
 function Audio:setSoundStage()
   if self.sound_fx then
-    local w, h = self.app.config.width / 2, self.app.config.height / 2
+    local scr_w, scr_h = self.app.video:getRenderSize()
+    local w, h = scr_w / 2, scr_h / 2
     self.sound_fx:setCamera(math.floor(w), math.floor(h), math.floor((w^2 + h^2)^0.5))
   end
 end
@@ -661,7 +670,7 @@ function Audio:stopBackgroundTrack()
   end
   SDL.audio.stopMusic()
   if self.midi_player then
-    self.midi_player:stop()
+    pcall(self.midi_player.stop, self.midi_player)
   end
   self.background_music = nil
 
@@ -693,10 +702,16 @@ function Audio:playBackgroundTrack(index)
     local music = info.music
     if not music or type(music) == 'number' then
       local data = self:getFileData(index)
-      if (not info.filename_music or info.is_xmi) then
+      if info.is_xmi then
         if self.midi_player then
-          self.midi_player:setVolume(self.app.config.music_volume)
-          self.midi_player:playXmi(data)
+          local ok, err = pcall(self.midi_player.setVolume, self.midi_player, self.app.config.music_volume)
+          if ok then
+            ok, err = pcall(self.midi_player.playXmi, self.midi_player, data)
+          end
+          if not ok then
+            print("Failed to play midi: " .. err)
+            return
+          end
 
           -- info.music has to be equal to background_music and both values need
           -- to be truthy and unique for the jukebox to detect the track. Using
@@ -718,10 +733,10 @@ function Audio:playBackgroundTrack(index)
         if music_data == nil then
           info.enabled = false
           local name, msg = (info.filename_music or info.filename)
-          if not self.warned then -- Warn once per session
-            self.app.ui:addWindow(UIInformation(self.app.ui, {_S.errors.music}))
+          if not self.warned and TheApp.ui then -- Warn once per session
+            TheApp.ui:addWindow(UIInformation(TheApp.ui, {_S.errors.music}))
+            self.warned = true
           end
-          self.warned = true
           if err == "No SoundFonts have been requested" then
             msg = "Required soundfont is not found, please download one. A suitable soundfont is linked from the CorsixTH wiki."
           elseif err == "XMP: Unrecognized file format" or err == "ModPlug_Load failed" then
@@ -791,7 +806,7 @@ function Audio:playSoundEffects(play_effects)
 end
 
 function Audio:tellInterestedEntitiesTheyCanNowPlaySounds()
-  if table_length(self.entities_waiting_for_sound_to_be_enabled) > 0 then
+  if not isTableEmpty(self.entities_waiting_for_sound_to_be_enabled) then
     for entity, callback in pairs(self.entities_waiting_for_sound_to_be_enabled) do
       callback()
       self.entities_waiting_for_sound_to_be_enabled[entity] = nil
@@ -809,7 +824,7 @@ end
 
 -- search for jukebox and notify it to update its play button
 function Audio:notifyJukebox()
-  local jukebox = self.app.ui:getWindow(UIJukebox)
+  local jukebox = TheApp.ui and TheApp.ui:getWindow(UIJukebox)
   if jukebox then
     jukebox:updatePlayButton()
   end
@@ -827,4 +842,12 @@ function Audio:releaseChannel(channel)
   if self.sound_fx and channel > -1 then
     self.sound_fx:releaseChannel(channel)
   end
+end
+
+function Audio:destroy()
+  self.has_bg_music = false
+  self.not_loaded = not TheApp.config.audio
+  self.speech_file_name = nil
+  self.sound_fx = nil
+  SDL.audio.destroy()
 end

@@ -55,6 +55,16 @@ because the letters ø and Ø is not included in the original ingame-font.
 
 
 -----------------------------------------------------------------------------]]
+-- Translator warning:
+-- Theme Hospital's original bitmap fonts have a limited character set, and
+-- some letters are missing; supported characters are case-sensitive.
+-- Unsupported characters appear as "?" in game. See the supported characters:
+-- https://github.com/CorsixTH/CorsixTH/wiki/Localization
+-- Translators may use plain-character substitutions (for example, "e" for an
+-- accented "e").
+-- If substitutions are unsuitable, change Font("cp437") to Font("unicode")
+-- to use the Unicode font instead. You may translate this note into this
+-- file's language if that would help other translators.
 
 -- TODO GENERAL: Skal det benevnes "spill", "brett", "nivå" eller noe annet?
 
@@ -64,10 +74,11 @@ because the letters ø and Ø is not included in the original ingame-font.
 
 -- 1. Global settings (do not edit!)
 --Font("unicode") --todo: Add unicode/freefont
+Font("cp437")
 Language("Norsk", "Norwegian", "nb", "nob")
 Inherit("english")
 Encoding(utf8)
-
+IsArabicNumerals(true)
 
 -- 2. Faxes
 fax = {
@@ -172,7 +183,6 @@ tooltip = {
     fullscreen_button = "Klikk for å gå i fullskjermmodus",
     width = "Skriv inn önsket skjermbredde",
     height = "Skriv inn önsket skjermhöyde",
-    change_resolution = "Endre opplösningen til dimensjonene du har angitt til venstre.",
     language = "Velg %s som språk",
     back = "Lukk vinduet med innstillinger",
     fullscreen = "Om spillet skal kjöre i fullskjerm eller vindusmodus",
@@ -180,8 +190,6 @@ tooltip = {
     apply = "Bruk den innskrevne opplösningen",
     language_dropdown_item = "Velg %s som språk",
     select_language = "Velg språk",
-    select_resolution = "Velg en ny opplösning",
-    resolution = "Opplösningen spillet skal kjöres i.",
     folder_button = "Mappeinnstillinger",
     customise_button = "¨Flere innstillinger", --todo: mer utfyllende beskrivelse? var "More settings you can change to customise your game play experience"
     capture_mouse = "Slå av eller på låsing av musepeker i spillvinduet",
@@ -204,7 +212,7 @@ tooltip = {
     browse_screenshots = "Se etter en annen lokasjon for skjermdumper  ( nåværende beliggenhet: %1% ) ",
     not_specified = "Ingen mappe er valgt enda!",
     font_location = "Lokasjon for en font som kan vise Unicode-bokstaver som er nödvendig for ditt språk. Om denne ikke velges så er bokstavtyåene begrenset til de som er i Theme Hospital.",
-    reset_to_default = "Tilbakestill mappen til standard lokasjon",
+    reset_to_default = "Tilbakestill mappen til standard lokasjon ( %1% )",
     default = "Standard lokasjon",
     no_font_specified = "Ingen font-fil er valgt enda!",
   },
@@ -828,16 +836,13 @@ options_window = {
   fullscreen = "Fullskjerm",
   width = "Bredde",
   height = "Höyde",
-  change_resolution = "Endre opplösning",
   back = "Tilbake",
   cancel = "Avbryt",
-  custom_resolution = "Egendefinert...",
   option_on = "På",
   option_off = "Av",
   caption = "Innstillinger",
   language = "Språk",
   apply = "Bruk",
-  resolution = "Opplösning",
   folder = "Mapper",
   customise = "Tilpass",
   capture_mouse = "Lås musepeker",

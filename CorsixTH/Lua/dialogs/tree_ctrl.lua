@@ -515,7 +515,7 @@ function TreeControl:TreeControl(root, x, y, width, height, col_bg, col_fg, y_of
     self.font = TheApp.gfx:loadFontAndSpriteTable("QData", "Font01V", nil, nil, { apply_ui_scale = true })
   end
   self.tree_sprites = gfx:loadSpriteTable("Bitmap", "tree_ctrl", true,
-    gfx:loadPalette("Bitmap", "tree_ctrl.pal"))
+    gfx:getPalette("tree_ctrl.pal"))
 
   -- Calculate sizes and counts
   local scrollbar_width = 20
@@ -548,7 +548,7 @@ end
 
 
 function TreeControl:hitTestTree(x, y)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   local rect = self.tree_rect
   x = x - rect.x * s
   y = y - rect.y * s - self.y_offset * s
@@ -590,7 +590,7 @@ end
 function TreeControl:onMouseDown(button, x, y)
   local redraw = Window.onMouseDown(self, button, x, y)
   if button ~= 4 and button ~= 5 then
-    local s = TheApp.config.ui_scale
+    local s = TheApp.gfx:getUIScale()
     -- NB: 4 and 5 are scrollwheel
     self.mouse_down_in_self = false
     if 0 <= x and 0 <= y and x < self.width * s and y < self.height * s then
@@ -680,7 +680,7 @@ end
 
 function TreeControl:draw(canvas, x, y)
   Window.draw(self, canvas, x, y)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   x = x + self.x * s + self.tree_rect.x * s
   y = y + self.y * s + self.tree_rect.y * s + self.y_offset * s
 

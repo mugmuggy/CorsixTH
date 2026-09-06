@@ -28,8 +28,8 @@ function UICasebook:UICasebook(ui, disease_selection)
   self:UIFullscreen(ui)
   local gfx = ui.app.gfx
   if not pcall(function()
-    self.background = gfx:loadRaw("DrugN01V", 640, 480, "QData", "QData", "DrugN01V.pal", true)
-    local palette = gfx:loadPalette("QData", "DrugN01V.pal", true)
+    self.background = gfx:loadRaw("DrugN01V", 640, 480, "QData", "QData", "DrugN01V.pal")
+    local palette = gfx:getPalette("DrugN01V.pal")
     self.panel_sprites = gfx:loadSpriteTable("QData", "DrugN02V", true, palette, { apply_ui_scale = true })
     self.title_font = gfx:loadFontAndSpriteTable("QData", "Font25V", false, palette, { apply_ui_scale = true })
     self.selected_title_font = gfx:loadFontAndSpriteTable("QData", "Font26V", false, palette, { apply_ui_scale = true })
@@ -86,6 +86,8 @@ function UICasebook:UICasebook(ui, disease_selection)
 
   if disease_selection then
     self:selectDisease(disease_selection)
+  elseif self.ui.casebook_selected_disease then
+    self:selectDisease(self.ui.casebook_selected_disease)
   else
     self.selected_index = #self.names_sorted
     self.selected_disease = self.names_sorted[self.selected_index]
@@ -198,10 +200,11 @@ function UICasebook:updateIcons()
 
   self.ui:updateTooltip() -- for the case that mouse is hovering over icon while player scrolls through list with keys
   self.percentage_counter = 50
+  self.ui.casebook_selected_disease = disease
 end
 
 function UICasebook:draw(canvas, x, y)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   canvas:scale(s, "bitmap")
   self.background:draw(canvas, self.x * s + x, self.y * s + y)
   canvas:scale(1, "bitmap")
@@ -344,7 +347,7 @@ function UICasebook:concentrateResearch()
 end
 
 function UICasebook:onMouseDown(button, x, y)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   -- Normal window operations if outside the disease list
   if x < 395 * s or x > 540 * s or y < 77 * s or y > 394 * s then
     return UIFullscreen.onMouseDown(self, button, x, y)
@@ -401,7 +404,7 @@ function UICasebook:afterLoad(old, new)
   if old < 236 then
     local gfx = TheApp.gfx
     self.background = gfx:loadRaw("DrugN01V", 640, 480, "QData", "QData", "DrugN01V.pal", true)
-    local palette = gfx:loadPalette("QData", "DrugN01V.pal", true)
+    local palette = gfx:getPalette("DrugN01V.pal")
     self.panel_sprites = gfx:loadSpriteTable("QData", "DrugN02V", true, palette, { apply_ui_scale = true })
     self.title_font = gfx:loadFontAndSpriteTable("QData", "Font25V", false, palette, { apply_ui_scale = true })
     self.selected_title_font = gfx:loadFontAndSpriteTable("QData", "Font26V", false, palette, { apply_ui_scale = true })

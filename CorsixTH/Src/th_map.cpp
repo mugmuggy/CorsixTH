@@ -24,6 +24,10 @@ SOFTWARE.
 
 #include "config.h"
 
+#ifdef WITH_TRACY
+#include <tracy/Tracy.hpp>
+#endif
+
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -71,6 +75,7 @@ map_tile_flags& map_tile_flags::operator=(uint32_t raw) {
   buildable_e = (raw & static_cast<uint32_t>(flags::buildable_e_mask)) != 0;
   buildable_s = (raw & static_cast<uint32_t>(flags::buildable_s_mask)) != 0;
   buildable_w = (raw & static_cast<uint32_t>(flags::buildable_w_mask)) != 0;
+  avoid_tile = (raw & static_cast<uint32_t>(flags::avoid_tile_mask)) != 0;
 
   return *this;
 }
@@ -121,6 +126,8 @@ bool& map_tile_flags::operator[](map_tile_flags::key key) {
       return buildable_s;
     case flags::buildable_w_mask:
       return buildable_w;
+    case flags::avoid_tile_mask:
+      return avoid_tile;
     default:
       throw std::out_of_range("map tile flag is invalid");
   }
@@ -172,6 +179,8 @@ const bool& map_tile_flags::operator[](map_tile_flags::key key) const {
       return buildable_s;
     case flags::buildable_w_mask:
       return buildable_w;
+    case flags::avoid_tile_mask:
+      return avoid_tile;
     default:
       throw std::out_of_range("map tile flag is invalid");
   }
@@ -243,6 +252,9 @@ map_tile_flags::operator uint32_t() const {
   }
   if (buildable_w) {
     raw |= static_cast<uint32_t>(flags::buildable_w_mask);
+  }
+  if (avoid_tile) {
+    raw |= static_cast<uint32_t>(flags::avoid_tile_mask);
   }
 
   return raw;
@@ -1732,6 +1744,7 @@ map_tile_iterator& map_tile_iterator::operator++() {
 }
 
 void map_tile_iterator::advance_until_visible() {
+  ZoneScoped;
   tile = nullptr;
 
   while (true) {

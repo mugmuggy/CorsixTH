@@ -255,7 +255,8 @@ function Room:getMissingStaff(criteria)
       if class.is(humanoid, Staff) and humanoid:fulfillsCriterion(attribute) and
           not humanoid:isLeaving() and not humanoid.fired and
           not (humanoid.on_call and humanoid.on_call.object ~= self) and
-          not humanoid.going_to_staffroom then
+          not humanoid.going_to_staffroom and
+          self:isRoomStaffMember(humanoid) then
         count = count - 1
       end
     end
@@ -341,6 +342,14 @@ function Room:onHumanoidEnter(humanoid)
     -- the handyman didn't arrive as a part of a job
     if humanoid.on_call then
       assert(humanoid.on_call.object:getRoom() == self, "Handyman arrived is on call but not arriving to the designated room")
+      local machine = self:getRoomMachine()
+      if machine then
+        local handyman = machine.repairing
+        if humanoid == handyman then
+          -- The handyman arrived to fix the machine. Should lock the room to keep patients out.
+          self:lockRoomOnRepair()
+        end
+      end
     else
       -- If the handyman was not assigned for the job (e.g. drop by manual pickup), do answer a call
       humanoid:setNextAction(AnswerCallAction())
@@ -602,6 +611,7 @@ function Room:onHumanoidLeave(humanoid)
       self.world.dispatcher:callForStaff(self)
     end
   end
+
   if class.is(humanoid, Staff) then
     -- Make patients leave the room (except wards) if there are no longer enough staff
     if not self:testStaffCriteria(self:getRequiredStaffCriteria()) or self:getStaffMember() == nil then
@@ -622,6 +632,18 @@ function Room:onHumanoidLeave(humanoid)
     end
     -- Remove any unwanted moods the staff member might have
     humanoid:setMood("staff_wait", "deactivate")
+  end
+
+  if class.is(humanoid, Handyman) then
+      local machine = self:getRoomMachine()
+      if machine then
+        local handyman = machine.repairing
+        if humanoid == handyman and not self.manual_repair then
+          -- The handyman arrived to fix the machine was grabbed from the room before repair finished.
+          self:unlockRoomOnRepair()
+          self:tryAdvanceQueue()
+        end
+      end
   end
 
   -- The player might be waiting to edit this room
@@ -1104,6 +1126,14 @@ function Room:isDiagnosisRoomForPatient(patient)
   end
 end
 
+--! Function to check is the humanoid is attached as the serving patients in the room.
+--!param humanoid (Humanoid) humanoid to check.
+--!return (boolean) Whether the humanoid is attached.
+function Room:isRoomStaffMember(humanoid)
+  -- The ward and operating theatre use staff_member_set. The other rooms use staff_member.
+  return (humanoid == self.staff_member) or (self.staff_member_set and self.staff_member_set[humanoid])
+end
+
 --! Get the average service quality of the staff members in the room.
 --!return (float) [0-1] Average staff service quality.
 function Room:getStaffServiceQuality()
@@ -1180,6 +1210,27 @@ function Room:calculateHappinessFactor()
   end
 
   self.happiness_factor = window_factor + space_factor
+end
+
+--! Get this room machine, if it there
+--!return (object) machine object
+function Room:getRoomMachine()
+  local fx, fy = self:getEntranceXY(true)
+  for object, _ in pairs(self.world:findAllObjectsNear(fx, fy)) do
+    if object.strength ~= nil then
+      return object
+    end
+  end
+end
+
+--! Locks the room to prevent patient from entering due to repair in room.
+function Room:lockRoomOnRepair()
+  self.needs_repair = true
+end
+
+--! Unlocks the room so repair no longer prevents patients from enter the room.
+function Room:unlockRoomOnRepair()
+  self.needs_repair = false
 end
 
 ----- BEGIN Save game compatibility -----

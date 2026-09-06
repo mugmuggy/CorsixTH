@@ -41,6 +41,9 @@ function UIAdviser:UIAdviser(ui)
   self.queued_messages = {}        -- There might be many messages in a row
   self.timer = nil                 -- Timer which hides adviser at the end
 
+  self.message_history = {}        -- Store past messages to be able to view them later
+  self.message_history_limit = 20  -- Limit the number of messages stored
+
   -- There are 5 phases the adviser might be in on a given time point.
   -- Not visible, getting up, talking, idling, getting_down.
   self.phase = 0
@@ -56,6 +59,52 @@ function UIAdviser:UIAdviser(ui)
 
   local th = TH.animation()
   self.th = th
+end
+
+function UIAdviser:messageIndexInHistory(message)
+  for index, msg in ipairs(self.message_history) do
+    if msg == message then
+      return index
+    end
+  end
+  return nil
+end
+
+--! Adds a message to the adviser's message history.
+--! If the history exceeds a certain limit, the oldest messages are removed.
+function UIAdviser:addMessageToHistory(speech)
+  local message_index_in_history = self:messageIndexInHistory(speech)
+
+  if message_index_in_history then
+    -- If the message is already in history, remove it first
+    table.remove(self.message_history, message_index_in_history)
+  end
+
+  -- Add the message at the top of the history
+  table.insert(self.message_history, 1, speech)
+
+  -- If the history exceeds the limit, remove the oldest messages (the last ones in the list)
+  while #self.message_history > self.message_history_limit do
+    table.remove(self.message_history, #self.message_history)
+  end
+end
+
+--! Adds all queued messages to the adviser's message history.
+function UIAdviser:addQueuedMessagesToHistory()
+  for _, message in ipairs(self.queued_messages) do
+
+    self:addMessageToHistory(message.speech)
+  end
+end
+
+--! Removes a message from the adviser's message history.
+function UIAdviser:removeMessageFromHistory(index)
+  table.remove(self.message_history, index)
+end
+
+--! Deletes all messages from the adviser's message history.
+function UIAdviser:deleteAllMessagesFromHistory()
+  self.message_history = {}
 end
 
 -- Shows the adviser by running the "popup" animation.
@@ -83,7 +132,8 @@ function UIAdviser:talk()
   local best = 1
   if self.queued_messages[1].priority then
     for i = 1, #self.queued_messages do
-      if best ~= i and self.queued_messages[best].priority < self.queued_messages[i].priority then
+      if best ~= i and self.queued_messages[i].priority and
+          self.queued_messages[best].priority < self.queued_messages[i].priority then
         best = i
       end
     end
@@ -91,6 +141,7 @@ function UIAdviser:talk()
   local speech = self.queued_messages[best].speech
   self.stay_up = self.queued_messages[best].stay_up
   table.remove(self.queued_messages, best)
+  self:addMessageToHistory(speech)
   self.speech = speech
   -- Calculate number of lines needed for the text.
   -- Each "/" at end of string indicates a blank line
@@ -184,13 +235,11 @@ end
 function UIAdviser:draw(canvas, x, y)
   Window.draw(self, canvas, x, y)
 
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   x, y = x + self.x * s, y + self.y * s
 
-  -- no scaleFactor for animation yet
-  canvas:scale(s)
-  self.th:draw(canvas, math.floor(x / s) + 200, math.floor(y / s))
-  canvas:scale(1)
+  self.th:setScaleFactor(s)
+  self.th:draw(canvas, x + 200 * s, y)
 
   if self.phase == 2 then
     -- Draw balloon only in the "talk" phase.
@@ -211,7 +260,7 @@ function UIAdviser:onMouseDown(button, x, y)
   if self.phase == 0 or self.phase == 4 then
     return Window.onMouseDown(self, button, x, y)
   end
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
 
   -- Normal operation outside the adviser bounds
   if x + self.balloon_width * s < 128 * s or x > 200 * s or
@@ -232,6 +281,8 @@ function UIAdviser:onMouseDown(button, x, y)
     end
   elseif button == "right" then
     self:hide()
+    -- Dump dismissed messages to history
+    self:addQueuedMessagesToHistory()
     self.queued_messages = {}
   end
 end
@@ -288,6 +339,10 @@ function UIAdviser:afterLoad(old, new)
   end
   if old < 236 then
     self.black_font = TheApp.gfx:loadFontAndSpriteTable("QData", "Font50V", nil, nil, { apply_ui_scale = true })
+  end
+  if old < 246 then
+    self.message_history = {}
+    self.message_history_limit = 20
   end
   Window.afterLoad(self, old, new)
 end

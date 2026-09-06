@@ -338,6 +338,7 @@ function UIHotkeyAssign:UIHotkeyAssign(ui, mode)
             "ingame_restartLevel",
             "ingame_quitLevel",
             "ingame_rotateobject",
+            "ingame_sellPickedUpItem",
             "ingame_patient_gohome",
             "ingame_setTransparent",
             "ingame_toggleTransparent" }}}},
@@ -409,10 +410,20 @@ function UIHotkeyAssign:UIHotkeyAssign(ui, mode)
             "ingame_panel_charts",
             "ingame_panel_policy",
             "ingame_panel_machineMenu",
+            "ingame_panel_adviserHistory",
             "ingame_panel_buildRoom",
             "ingame_panel_furnishCorridor",
             "ingame_panel_editRoom",
-            "ingame_panel_hireStaff",
+            "ingame_panel_hireStaff",}}}},
+    {
+      -- FIXME: Rename to "Alternate Panel Keys"
+      -- New strings required but string freeze applies at time of patch
+      id = "panels2",
+      title = _S.hotkey_window.caption_panels,
+      tooltip = _S.tooltip.hotkey_window.caption_panels,
+      sections = {{
+          title = _S.hotkey_window.caption_panels,
+          keys = {
             "ingame_panel_map_alt",
             "ingame_panel_research_alt",
             "ingame_panel_casebook_alt",
@@ -517,7 +528,7 @@ end
 
 function UIHotkeyAssign:buttonDefaults()
   -- Copy the default hotkeys into the app's current hotkey table.
-  self.app.hotkeys = shallow_clone(select(6, corsixth.require("config_finder")))
+  self.app.hotkeys = corsixth.require("config_finder").hotkeys_defaults()
 
   -- Reload all hotkey boxes' text.
   for _, v in pairs(self.key_windows) do

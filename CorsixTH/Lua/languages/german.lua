@@ -17,14 +17,26 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
+-- Translator warning:
+-- Theme Hospital's original bitmap fonts have a limited character set, and
+-- some letters are missing; supported characters are case-sensitive.
+-- Unsupported characters appear as "?" in game. See the supported characters:
+-- https://github.com/CorsixTH/CorsixTH/wiki/Localization
+-- Translators may use plain-character substitutions (for example, "e" for an
+-- accented "e").
+-- If substitutions are unsuitable, change Font("cp437") to Font("unicode")
+-- to use the Unicode font instead. You may translate this note into this
+-- file's language if that would help other translators.
 
 -- Thanks to Michael "michederoide" Armbruster for some additional corrections!
 
 -- Note: This file contains UTF-8 text. Make sure your editor is set to UTF-8.
 
+Font("cp437")
 Language("Deutsch", "German", "de", "ger", "deu")
 Inherit("english")
 Inherit("original_strings", 2)
+IsArabicNumerals(true)
 
 -------------------------------  OVERRIDE  ----------------------------------
 diseases.broken_wind.cure = " Therapie: Eine spezielle Mixtur aus der Pharma-Theke sorgt für Windstille." -- original string mentioned inflation, which is plain wrong.
@@ -462,9 +474,7 @@ options_window = {
   option_on = "Ein",
   option_off = "Aus",
   fullscreen = "Vollbild",
-  resolution = "Auflösung",
   capture_mouse = "Maus einfangen",
-  custom_resolution = "Benutzerdefiniert...",
   width = "Breite",
   height = "Höhe",
   customise = "Spezialeinstellungen",
@@ -482,8 +492,6 @@ options_window = {
 tooltip.options_window = {
   fullscreen = "Darstellung im Vollbild- oder Fenstermodus",
   fullscreen_button = "Klicken, um zwischen Vollbild- und Fenstermodus zu wechseln",
-  resolution = "Die Bildschirmauflösung, in der das Spiel läuft",
-  select_resolution = "Eine neue Auflösung auswählen",
   capture_mouse = "Ein- bzw. Ausschalten, ob der Mauszeiger das Fenster verlassen kann",
   width = "Gewünschte Bildschirmbreite eingeben",
   height = "Gewünschte Bildschirmhöhe eingeben",
@@ -575,7 +583,7 @@ tooltip.folders_window = {
   no_font_specified = "Kein Schriftverzeichnis festgelegt!",
   not_specified = "Kein Verzeichnis festgelegt!",
   default = "Standard",
-  reset_to_default = "Das Verzeichnis zur Standardeinstellung zurücksetzen",
+  reset_to_default = "Das Verzeichnis zur Standardeinstellung zurücksetzen (%1%)",
   --
   back = "Dieses Menü schließen und zum Einstellungsmenü zurückkehren",
 }
@@ -1039,6 +1047,3 @@ original_credits[361] = " "
 
 --------------------------------  UNUSED  -----------------------------------
 ------------------- (kept for backwards compatibility) ----------------------
-
-options_window.change_resolution = "Auflösung ändern"
-tooltip.options_window.change_resolution = "Die Fensterauflösung auf die links eingegebenen Werte ändern"

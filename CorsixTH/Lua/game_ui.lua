@@ -31,15 +31,13 @@ local TH = require("TH")
 
 local Announcer = _G["Announcer"]
 
+-- Factor to multiply pinch_zoom scale by, bigger number results in
+-- faster zoom changes
+local pinch_zoom_sensitivity = 1
+
 -- The maximum distance to shake the screen from the origin during an
 -- earthquake with full intensity.
 local shake_screen_max_movement = 50 --pixels
-
--- 0.002 is about 5 pixels on a 1920 pixel display
-local multigesture_pinch_sensitivity_factor = 0.002
--- combined with the above, multiplying by 100 means minimum current_momentum.z for any detected pinch
--- will result in a call to adjustZoom in the onTick method
-local multigesture_pinch_amplification_factor = 100
 
 -- Speed of scrolling when using keys. Pixels / tick (18ms)
 -- This scroll speed is further adjusted by the configured scroll_speed
@@ -50,7 +48,7 @@ local key_scroll_speed = 10
 --!param local_hospital Hospital to display
 --!param map_editor (bool) Whether the map is editable.
 function GameUI:GameUI(app, local_hospital, map_editor)
-  self:UI(app)
+  self:UI(app, false)
   self.app = app
 
   self.hospital = local_hospital
@@ -71,27 +69,36 @@ function GameUI:GameUI(app, local_hospital, map_editor)
   self.subtitles = Subtitles(self)
   self:addWindow(self.subtitles)
 
-  local scr_w = app.config.width
-  local scr_h = app.config.height
-  self.visible_diamond = self:makeVisibleDiamond(scr_w, scr_h)
+  self.zoom_factor = 1
+  local efz = self.zoom_factor * TheApp.gfx:getWindowDisplayScale()
+  local scr_w, scr_h = app.video:getRenderSize()
+
+  -- With the zoom the game screen is the pixel size of the screen divided by
+  -- the effective zoom level (zoom_factor * display scale)
+  local wwz, hwz = scr_w / efz, scr_h / efz
+  self.visible_diamond = self:makeVisibleDiamond(wwz, hwz)
   if self.visible_diamond.w <= 0 or self.visible_diamond.h <= 0 then
-    -- For a standard 128x128 map, screen size would have to be in the
-    -- region of 3276x2457 in order to be too large.
+    -- For a standard 128x128 map, 3276x2457 at 1x effective zoom would be too
+    -- large and reveal the edges of the map. At 2x effective zoom this doubles
+    -- and so on. Currently we error out, but it should be possible to instead
+    -- automatically adjust the effective zoom factor until the map fits.
     if not self.map_editor then
-      error("Screen size too large for the map. Adjust your resolution in Settings.")
+      error("Window size too large for the map. " ..
+          "Adjust your window size in Settings or the scale of your display in your operating system.")
     end
   end
-  self.screen_offset_x, self.screen_offset_y = app.map:WorldToScreen(
-    app.map.th:getCameraTile(local_hospital:getPlayerIndex()))
-  self.zoom_factor = 1
-  self:scrollMap(-scr_w / 2, 16 - scr_h / 2)
+  -- move the map so the top,left corner is at the camera tile
+  local cx, cy = app.map.th:getCameraTile(local_hospital:getPlayerIndex())
+  self.screen_offset_x, self.screen_offset_y = app.map:WorldToScreen(cx, cy)
+
+  -- then adjust half a screen left/up to center the camera
+  self:scrollMap(-wwz / 2, 16 - hwz / 2)
   self.limit_to_visible_diamond = not self.map_editor
   self.transparent_walls = false
   self.do_world_hit_test = true
 
   self.momentum = app.config.scrolling_momentum
   self.current_momentum = {x = 0.0, y = 0.0, z = 0.0}
-  self.multigesturemove = {x = 0.0, y = 0.0}
 
   self.recallpositions = {}
 
@@ -199,8 +206,7 @@ end
 --! makeVisibleDiamond. This function calculates the minimum zoom_factor that
 --! would be allowed.
 function GameUI:calculateMinimumZoom()
-  local scr_w = self.app.config.width
-  local scr_h = self.app.config.height
+  local scr_w, scr_h = TheApp.video:getRenderSize()
   local map_h = self.app.map.height
 
   -- Minimum width:  0 = 32 * map_h - (scr_h/factor) - (scr_w/factor) / 2,
@@ -214,7 +220,7 @@ function GameUI:calculateMinimumZoom()
   return factor
 end
 
-function GameUI:setZoom(factor)
+function GameUI:setZoom(factor, follow_cursor)
   if factor <= 0 then
     return false
   end
@@ -222,42 +228,43 @@ function GameUI:setZoom(factor)
     factor = 1
   end
 
-  local scr_w = self.app.config.width
-  local scr_h = self.app.config.height
-  local new_diamond = self:makeVisibleDiamond(scr_w / factor, scr_h / factor)
+  local ezf = factor * TheApp.gfx:getWindowDisplayScale()
+
+  local scr_w, scr_h = TheApp.video:getRenderSize()
+  local new_diamond = self:makeVisibleDiamond(scr_w / ezf, scr_h / ezf)
   if new_diamond.w < 0 or new_diamond.h < 0 then
     return false
   end
 
   self.visible_diamond = new_diamond
-  local refx, refy = self.cursor_x or scr_w / 2, self.cursor_y or scr_h / 2
+  local refx, refy = follow_cursor and self.cursor_x or scr_w / 2, follow_cursor and self.cursor_y or scr_h / 2
   local cx, cy = self:ScreenToWorld(refx, refy)
   self.zoom_factor = factor
 
   cx, cy = self.app.map:WorldToScreen(cx, cy)
-  cx = cx - self.screen_offset_x - refx / factor
-  cy = cy - self.screen_offset_y - refy / factor
+  cx = cx - self.screen_offset_x - refx / ezf
+  cy = cy - self.screen_offset_y - refy / ezf
   self:scrollMap(cx, cy)
   return true
 end
 
 function GameUI:draw(canvas)
   local app = self.app
-  local config = app.config
+  local scr_w, scr_h = canvas:getRenderSize()
   if self.map_editor or not self.in_visible_diamond then
     canvas:fillBlack()
   end
-  local zoom = self.zoom_factor
+  local zoom = self:getEffectiveZoom()
   local dx = self.screen_offset_x +
       math.floor((0.5 - math.random()) * self.shake_screen_intensity * shake_screen_max_movement * 2)
   local dy = self.screen_offset_y +
       math.floor((0.5 - math.random()) * self.shake_screen_intensity * shake_screen_max_movement * 2)
   if canvas:scale(zoom) then
-    app.map:draw(canvas, dx, dy, math.ceil(config.width / zoom), math.ceil(config.height / zoom), 0, 0)
+    app.map:draw(canvas, dx, dy, math.ceil(scr_w / zoom), math.ceil(scr_h / zoom), 0, 0)
     canvas:scale(1)
   else
-    self:setZoom(1)
-    app.map:draw(canvas, dx, dy, config.width, config.height, 0, 0)
+    self:setZoom(1, false)
+    app.map:draw(canvas, dx, dy, scr_w, scr_h, 0, 0)
   end
   Window.draw(self, canvas, 0, 0) -- NB: not calling UI.draw on purpose
   self:drawTooltip(canvas)
@@ -270,12 +277,12 @@ function GameUI:onChangeResolution()
   -- Calculate and enforce minimum zoom
   local minimum_zoom = self:calculateMinimumZoom()
   if self.zoom_factor < minimum_zoom then
-    self:setZoom(minimum_zoom)
+    self:setZoom(minimum_zoom, false)
   end
   -- Recalculate scrolling bounds
-  local scr_w = self.app.config.width
-  local scr_h = self.app.config.height
-  self.visible_diamond = self:makeVisibleDiamond(scr_w / self.zoom_factor, scr_h / self.zoom_factor)
+  local scr_w, scr_h = TheApp.video:getRenderSize()
+  local zoom = self:getEffectiveZoom()
+  self.visible_diamond = self:makeVisibleDiamond(scr_w / zoom, scr_h / zoom)
   self:scrollMap(0, 0)
 
   UI.onChangeResolution(self)
@@ -405,12 +412,12 @@ function GameUI:makeDebugFax()
 end
 
 function GameUI:ScreenToWorld(x, y)
-  local zoom = self.zoom_factor
+  local zoom = self:getEffectiveZoom()
   return self.app.map:ScreenToWorld(self.screen_offset_x + x / zoom, self.screen_offset_y + y / zoom)
 end
 
 function GameUI:WorldToScreen(x, y)
-  local zoom = self.zoom_factor
+  local zoom = self:getEffectiveZoom()
   x, y = self.app.map:WorldToScreen(x, y)
   x = x - self.screen_offset_x
   y = y - self.screen_offset_y
@@ -429,7 +436,7 @@ function GameUI:setWorldHitTest(mode)
 end
 
 function GameUI:onCursorWorldPositionChange()
-  local zoom = self.zoom_factor
+  local zoom = self:getEffectiveZoom()
   local x = math.floor(self.screen_offset_x + self.cursor_x / zoom)
   local y = math.floor(self.screen_offset_y + self.cursor_y / zoom)
   local entity = nil
@@ -583,7 +590,7 @@ function GameUI:onMouseMove(x, y, dx, dy)
   end
 
   if self:_isMouseScrollButtonDown() then
-    local zoom = self.zoom_factor
+    local zoom = self:getEffectiveZoom()
     self.current_momentum.x = self.current_momentum.x - dx/zoom
     self.current_momentum.y = self.current_momentum.y - dy/zoom
 
@@ -614,21 +621,22 @@ function GameUI:onMouseMove(x, y, dx, dy)
     -- In windowed mode, a reasonable size is needed, though not too large.
     scroll_region_size = 8
   end
+  local scr_w, scr_h = TheApp.video:getRenderSize()
   if not self.app.config.prevent_edge_scrolling and
       (x < scroll_region_size or y < scroll_region_size or
-       x >= self.app.config.width - scroll_region_size or
-       y >= self.app.config.height - scroll_region_size) then
+       x >= scr_w - scroll_region_size or
+       y >= scr_h - scroll_region_size) then
     local scroll_dx = 0
     local scroll_dy = 0
     local scroll_power = 7
     if x < scroll_region_size then
       scroll_dx = -scroll_power
-    elseif x >= self.app.config.width - scroll_region_size then
+    elseif x >= scr_w - scroll_region_size then
       scroll_dx = scroll_power
     end
     if y < scroll_region_size then
       scroll_dy = -scroll_power
-    elseif y >= self.app.config.height - scroll_region_size then
+    elseif y >= scr_h - scroll_region_size then
       scroll_dy = scroll_power
     end
 
@@ -673,6 +681,7 @@ function GameUI:onMouseUp(code, x, y)
     return UI.onMouseUp(self, code, x, y)
   end
 
+  -- Controlling debug patients movement with a cursor
   local button = self.button_codes[code]
   if button == "right" and not self.map_editor and highlight_x then
     local window = self:getWindow(UIPatient)
@@ -740,56 +749,61 @@ function GameUI:onMouseUp(code, x, y)
   return UI.onMouseUp(self, code, x, y)
 end
 
---! Process SDL_MULTIGESTURE events for zoom and map move functionality
---!param numfingers (integer) number of touch points, received from the SDL event
---!  This is still more info about param x.
---!param dTheta (float) rotation in radians of the gesture from the SDL event
---!param dDist (float) magnitude of pinch from the SDL event
---!param x (float) normalised x value of the gesture
---!param y (float) normalised y value of the gesture
+--! Process SDL_EVENT_PINCH_BEGIN.
+--!
 --!return (boolean) event processed indicator
-function GameUI:onMultiGesture(numfingers, dTheta, dDist, x, y)
-  -- only deal with 2 finger events for now
-  if numfingers == 2 then
-    -- calculate magnitude of pinch
-    local mag = math.abs(dDist)
-    if mag > multigesture_pinch_sensitivity_factor then
-      -- pinch action - constant needs to be tweaked
-      self.current_momentum.z = self.current_momentum.z + dDist * multigesture_pinch_amplification_factor
-      return true
-    else
-      -- scroll map
-      local normx = self.app.config.width * x
-      local normy = self.app.config.height * y
-
-      if self.multigesturemove.x == 0.0 then
-        self.multigesturemove.x = normx
-        self.multigesturemove.y = normy
-      else
-        local dx = normx - self.multigesturemove.x
-        local dy = normy - self.multigesturemove.y
-        self.current_momentum.x = self.current_momentum.x - dx
-        self.current_momentum.y = self.current_momentum.y - dy
-        self.multigesturemove.x = normx
-        self.multigesturemove.y = normy
-      end
-      return true
-    end
-  end
-  return false
+function GameUI:onPinchBegin()
+  self.current_momentum.z = 0
 end
 
-function GameUI:onMouseWheel(x, y)
+--! Process SDL_EVENT_PINCH_UPDATE.
+--!
+--!return (boolean) event processed indicator
+--!param scale (number) The scale change since the last SDL_EVENT_PINCH_UPDATE.
+--!                     Scale < 1 is "zoom out". Scale > 1 is "zoom in"
+function GameUI:onPinchUpdate(scale)
+  self.current_momentum.z = self.current_momentum.z + (scale - 1) * pinch_zoom_sensitivity
+  return true
+end
+
+--! Process SDL_EVENT_PINCH_END.
+--!
+--!return (boolean) event processed indicator
+function GameUI:onPinchEnd()
+end
+
+function GameUI:onWindowDisplayScaleChanged(scale)
+  local gfx = self.app.gfx
+  local old_ds = gfx:getWindowDisplayScale()
+  UI.onWindowDisplayScaleChanged(self, scale)
+  local new_ds = gfx:getWindowDisplayScale()
+
+  if old_ds ~= new_ds then
+    self:setZoom(self.zoom_factor, false)
+  end
+end
+
+--! Process SDL_EVENT_MOUSE_WHEEL
+--!
+--!param x (number) the amount scrolled horizontally (+x = right, -x = left)
+--!param y (number) the amount scrolled vertically (+y = up/away, -y = down/towards)
+--!param touch (boolean) whether the mouse wheel is from a touch gesture
+--!param flipped (boolean) whether the axis are flipped such as MacOS natural scrolling
+function GameUI:onMouseWheel(x, y, touch, flipped)
   local inside_window = false
   if self.windows then
     for _, window in ipairs(self.windows) do
-      if window:hitTest(self.cursor_x - window.x, self.cursor_y - window.y) then
+      local wx, wy = window:getRealXY()
+      if window:hitTest(self.cursor_x - wx, self.cursor_y - wy) then
         inside_window = true
         break
       end
     end
   end
   if not inside_window then
+    -- Consider making touch scrolling pan instead of zoom, you can pinch to zoom
+    -- on a touch pad.
+
     -- Apply momentum to the zoom
     if math.abs(self.current_momentum.z) < 12 then
       self.current_momentum.z = self.current_momentum.z + y
@@ -847,14 +861,10 @@ function GameUI:onTick()
       self.current_momentum.y = self.current_momentum.y * self.momentum
       self:scrollMap(self.current_momentum.x, self.current_momentum.y)
     end
-    if math.abs(self.current_momentum.z) < 0.2 then
-      self.current_momentum.z = 0.0
-    else
-      self.current_momentum.z = self.current_momentum.z * self.momentum
+    if math.abs(self.current_momentum.z) > 0.2 then
       self.app.world:adjustZoom(self.current_momentum.z)
     end
-    self.multigesturemove.x = 0.0
-    self.multigesturemove.y = 0.0
+    self.current_momentum.z = self.current_momentum.z * self.momentum
   end
   if self.tick_scroll_amount or self.tick_scroll_amount_mouse then
     -- The scroll amount per tick gradually increases as the duration of the
@@ -914,10 +924,10 @@ end
 local abs, sqrt_5, floor = math.abs, math.sqrt(1 / 5), math.floor
 
 function GameUI:scrollMapTo(x, y)
-  local zoom = 2 * self.zoom_factor
-  local config = self.app.config
-  return self:scrollMap(x - self.screen_offset_x - config.width / zoom,
-                        y - self.screen_offset_y - config.height / zoom)
+  local zoom = 2 * self:getEffectiveZoom()
+  local scr_w, scr_h = TheApp.video:getRenderSize()
+  return self:scrollMap(x - self.screen_offset_x - scr_w / zoom,
+                        y - self.screen_offset_y - scr_h / zoom)
 end
 
 function GameUI.limitPointToDiamond(dx, dy, visible_diamond, do_limit)
@@ -1239,7 +1249,8 @@ end
 --! Converts centre of screen coordinates to world tile positions and stores the values for later recall
 -- param index (integer) Position in recallpositions table
 function GameUI:setMapRecallPosition(index)
-  local cx, cy = self:ScreenToWorld(self.app.config.width / 2, self.app.config.height / 2)
+  local scr_w, scr_h = TheApp.video:getRenderSize()
+  local cx, cy = self:ScreenToWorld(scr_w / 2, scr_h / 2)
   self.recallpositions[index] = {x = cx, y = cy, z = self.zoom_factor}
 end
 
@@ -1247,9 +1258,10 @@ end
 -- param index (integer) Position in recallpositions table
 function GameUI:recallMapPosition(index)
   if self.recallpositions[index] ~= nil then
+    local scr_w, scr_h = TheApp.video:getRenderSize()
     local sx, sy = self.app.map:WorldToScreen(self.recallpositions[index].x,  self.recallpositions[index].y)
-    local dx, dy = self.app.map:ScreenToWorld(self.app.config.width / 2, self.app.config.height / 2)
-    self:setZoom(self.recallpositions[index].z)
+    local dx, dy = self.app.map:ScreenToWorld(scr_w / 2, scr_h / 2)
+    self:setZoom(self.recallpositions[index].z, false)
     self:scrollMapTo(sx + dx, sy + dy)
   end
 end
@@ -1305,9 +1317,6 @@ function GameUI:afterLoad(old, new)
   if old < 115 then
     self.shake_screen_intensity = 0
   end
-  if old < 122 then
-    self.multigesturemove = {x = 0.0, y = 0.0}
-  end
   if old < 129 then
     self.recallpositions = {}
   end
@@ -1318,6 +1327,9 @@ function GameUI:afterLoad(old, new)
   if old < 240 then
     self.subtitles = Subtitles(self)
     self:addWindow(self.subtitles)
+  end
+  if old < 264 then
+    self.multigesturemove = nil
   end
 
   self.announcer.playing = false
@@ -1360,4 +1372,8 @@ end
 function GameUI:restartMapEditor()
   self:addWindow(UIConfirmDialog(self, false, _S.confirmation.restart_mapeditor,
     --[[persistable:app_hotkey_confirm_mapeditor_restart]] function() self.app:mapEdit() end))
+end
+
+function GameUI:getEffectiveZoom()
+  return self.zoom_factor * TheApp.gfx:getWindowDisplayScale()
 end

@@ -10,18 +10,34 @@
 -------------------------------- SETTINGS MENU --------------------------------
 -- These settings can also be changed from within the game in the settings menu
 -------------------------------------------------------------------------------
--- Screen size. Must be at least 640x480. Larger sizes will require better
--- hardware in order to maintain a playable framerate. The fullscreen setting
--- can be true or false, and the game will run windowed if not fullscreen.
--- ui_scale can be set to 1, 2, or 3 to scale the user interface for higher
--- resolution displays. For example, at 1920x1080 resolution, setting ui_scale
--- to 2 will make the interface elements twice as large.
+-- fullscreen: Can be true or false.
+--  If true then the game uses a full screen window. If false the game may be
+--  windowed or maximized.
+-- maximized: Can be true or false.
+--  If the game is not running full screen then it will be maximized if this
+--  is true otherwise it will be windowed.
+-- Window size (width and height): At least 640x480.
+--  The window size the game runs at when it is not maximized or in full screen
+--  mode.
+-- original_aspect_ratio: True or false
+--  If true then the game is letterboxed so that it is drawn at a 4:3 aspect
+--  ratio like the original game.
+-- ui_scale: Whole number.
+--  Pixel ratio to draw UI elements; decimals unsupported. 0 for automatic.
+--  Example: ui_scale = 2 makes UI elements twice as large.
+--  The ui_scale will be capped at runtime to the largest size that fits in the
+--  window; assuming an original size of 640x480.
+-- cursor_scale: Whole number (0, 1, 2, 3...)
+--  Pixel ratio to draw the cursor. 0 is Auto and will match the current
+--  UI scale.
 --
 fullscreen = SCREEN_FULLSCREEN
-
+maximized = false
 width = SCREEN_SIZE_WIDTH
 height = SCREEN_SIZE_HEIGHT
-ui_scale = 1
+original_aspect_ratio = false
+ui_scale = 0
+cursor_scale = 0
 
 -------------------------------------------------------------------------------
 -- Language to use for ingame text. Between the square braces should be one of:
@@ -35,6 +51,7 @@ ui_scale = 1
 --  Finnish               / Suomi / fi / fin
 --  French                / fr / fre / fra
 --  German                / de / ger / deu
+--  Greek                 / el / gre / ell
 --  Hungarian             / hu / hun
 --  Italian               / it / ita
 --  Japanese              / ja / jp
@@ -227,6 +244,15 @@ enable_screen_shake = true
 --
 enable_announcer_subtitles = false
 
+-------------------------------------------------------------------------------
+-- By default, the game autosaves every in-game month. If you would like to
+-- autosave more often, every week or every day, change this setting to 2 or 3.
+-- Please note that a typical save can take up to 1 megabyte or even more.
+-- This way your autosaves folder can grow to 300-500 MB with daily autosaves.
+-- Set 1 for Monthly, 2 for Weekly, 3 for Daily autosaves.
+--
+autosave_frequency = 1
+
 ------------------------------- FOLDER SETTINGS -------------------------------
 -- These settings can also be changed from the Folders Menu
 -------------------------------------------------------------------------------
@@ -267,6 +293,7 @@ campaigns = nil -- [[X:\ThemeHospital\Campaigns]]
 -- Use new graphics. Whether to use the original graphics from Theme Hospital
 -- or use new graphics created by the CorsixTH project.
 -- Developer use only, otherwise the game will very likely crash in normal use
+--
 use_new_graphics = false
 
 -------------------------------------------------------------------------------
@@ -276,6 +303,7 @@ use_new_graphics = false
 -- will be used if you just switch on new graphics. If you however have
 -- acquired graphics from somewhere else, then uncomment the following line
 -- and point it to the directory which contains the new graphics.
+--
 new_graphics_folder = nil -- [[X:\ThemeHospital\Graphics]]
 
 -------------------------------------------------------------------------------
@@ -329,17 +357,6 @@ midi_port = nil -- [[Midi Through:Midi Through Port-0 14:0]]
 ------------------------------- SPECIAL SETTINGS ------------------------------
 -- These settings can only be changed here
 -------------------------------------------------------------------------------
--- Audio playback settings.
--- These can be commented out to use the default values from the game binary.
--- Note: On some platforms, these settings may not effect MIDI playback - only
--- sound effects and music audio. If you are experiencing poor audio playback,
--- then try doubling the buffer size.
---
-audio_frequency = 22050
-audio_channels = 2
-audio_buffer_size = 2048
-
--------------------------------------------------------------------------------
 -- Advanced MIDI settings.
 -- These settings can enable better MIDI playback on some systems but may also
 -- cause issues or be unsupported on others.
@@ -383,17 +400,62 @@ shift_scroll_speed = 4
 room_information_dialogs = true
 
 -------------------------------------------------------------------------------
--- If true, parts of the hospital can be made inaccessible by blocking the path
--- with rooms or objects. If false, all parts of the hospital must be kept
--- accessible, the game will disallow any attempt to blocking the path.
+-- Ability to block off areas when building and placing objects.
 --
-allow_blocking_off_areas = false
+-- There are 3 possible options:
+--
+-- 1. Totally forbidden - requires every passable tile in the hospital
+-- to remain reachable from a hospital entrance. This avoids issues that
+-- could arise from area blocking, but it also prevents room layouts
+-- which are allowed in Theme Hospital. Before version 0.70 this was
+-- a default option in CorsixTH.
+--
+-- 2. Partially allowed - user is allowed to make dead ended, inaccessible
+-- spaces that are not accessible from the hospital entrance but only if
+-- certain conditions are met. The condition is that the rooms themselves
+-- and usable objects inside the room must remain accessible. This ensures
+-- the preservation of the hospital's functionality and ensures the validity
+-- of the path routing in the hospital. This allows user to build rooms with
+-- the same layout as in the original TH. This is a safe option.
+--
+-- 3. Completely allowed - user is allowed to make dead ended,
+-- inaccessible spaces that are not accessible from the hospital entrance.
+-- This is a dangerous feature that can lead to game crashes. Use it only
+-- at your own risk and if you fully understand why you enabling it.
+--
+-- Set '1' for '1. Totally forbidden',
+-- Set '2' for '2. Partially allowed' (Default),
+-- Set '3' for '3. Completely allowed'.
+--
+blocking_off_areas = 2
 
 -------------------------------------------------------------------------------
 -- Direct Zoom: Avoid rendering to an intermediate texture when zooming.
 -- Improves performance and reliability on some hardware.
 --
 direct_zoom = nil
+
+-------------------------------------------------------------------------------
+-- HiDPI: Inform the windowing system that the game is HiDPI aware. This will
+-- allow the game to be rendered at the native resolution of the display.
+-- The exact effect depends on the windowing system and the display.
+--
+-- In HiDPI mode the windowing system supplies the application with a display
+-- scale value which if applied will scale the cursor, ui, and default zoom in
+-- addition to the configured value for those fields.
+--
+hidpi = true
+apply_window_display_scale = true
+
+-- Fractional Scaling: Allows ui_scale and cursor scale to be a fractional
+-- number. With debug_fractional_scaling enabled and apply_window_display_scale
+-- enabled CorsixTH will use the exact display scale provided by the
+-- windowing system instead of rounding down to the nearest whole number
+-- greater than zero.
+--
+-- THIS SETTING IS HIGHLY EXPERIMENTAL AND WILL CRASH YOUR GAME!!!
+--
+debug_fractional_scaling = false
 
 -------------------------------------------------------------------------------
 -- Replacing Machines: By default, you will see a new machines initial strength

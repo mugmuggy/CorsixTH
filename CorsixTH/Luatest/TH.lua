@@ -34,6 +34,7 @@ TheApp = {
     loadSpriteTable = function() end,
     loadFont = loadFont,
     loadFontAndSpriteTable = loadFont,
+    getUIScale = function() return 1 end,
   },
   runtime_config = {},
   config = {
@@ -50,6 +51,9 @@ TheApp = {
     setPatientMarker = function(...) end,
     setStaffMarker = function(...) end,
   },
+  video = {
+    getRenderSize = function() return 0, 0 end
+  }
 }
 
 local sub_S = setmetatable({key = ''}, {

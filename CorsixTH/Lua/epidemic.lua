@@ -419,8 +419,8 @@ function Epidemic:finishCoverUp()
   self:turnOffVaccinationMode()
 end
 
---[[ Inspector had arrived at reception desk. Check if
-any infected still in hospital and determine final verdict.]]
+--[[ Inspector had arrived at reception desk, or a hospital without a desk.
+Check if any infected still in hospital and determine final verdict.]]
 function Epidemic:handleInspectorArrival()
   local still_infected = self:countInfectedPatients()
   self:determineFaxAndFines(still_infected)
@@ -513,7 +513,7 @@ end
 --as they leave the reception desks.]]
 function Epidemic:markPatientsAsPassedReception()
   local queuing_patients = {}
-  for _, desk in ipairs(self.hospital:findReceptionDesks()) do
+  for _, desk in ipairs(self.hospital:getReceptionDesks()) do
     for _, patient in ipairs(desk.queue) do
       -- Use patient as map key to speed up lookup
       queuing_patients[patient] = true
@@ -735,7 +735,7 @@ end
 --[[ For Cheat - Cancel the epidemic. ]]
 function Epidemic:cancelEpidemic()
   -- Remove init epidemic fax
-  self.world.ui.bottom_panel:removeMessage(self)
+  self.world.ui.bottom_panel:deleteMessage(self)
   -- Turn vaccination mode off if enabled
   self:turnOffVaccinationMode()
   -- Remove epidemic timer

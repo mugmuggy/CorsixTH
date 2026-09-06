@@ -489,6 +489,16 @@ int l_anim_make_invisible(lua_State* L) {
 }
 
 template <typename T>
+int l_anim_is_visible(lua_State* L) {
+  T* pAnimation = luaT_testuserdata<T>(L);
+  constexpr uint32_t alpha_flags =
+      static_cast<uint32_t>(thdf_alpha_50 | thdf_alpha_75);
+  uint32_t object_alpha_flags = pAnimation->get_flags() & alpha_flags;
+  lua_pushboolean(L, object_alpha_flags == alpha_flags ? 0 : 1);
+  return 1;
+}
+
+template <typename T>
 int l_anim_get_flag(lua_State* L) {
   T* pAnimation = luaT_testuserdata<T>(L);
   lua_pushinteger(L, pAnimation->get_flags());
@@ -616,6 +626,13 @@ int l_anim_set_patient_effect(lua_State* L) {
   return 1;
 }
 
+template <typename T>
+int l_anim_set_scale_factor(lua_State* L) {
+  T* anim = luaT_testuserdata<T>(L);
+  anim->set_scale_factor(static_cast<int>(luaL_checkinteger(L, 2)));
+  return 0;
+}
+
 int l_srl_set_sheet(lua_State* L) {
   sprite_render_list* pSrl = luaT_testuserdata<sprite_render_list>(L);
   sprite_sheet* pSheet = luaT_testuserdata<sprite_sheet>(L, 2);
@@ -718,6 +735,7 @@ void lua_register_anims(const lua_register_state* pState) {
     lcb.add_function(l_anim_set_flag<animation>, "setFlag");
     lcb.add_function(l_anim_set_flag_partial<animation>, "setPartialFlag");
     lcb.add_function(l_anim_get_flag<animation>, "getFlag");
+    lcb.add_function(l_anim_is_visible<animation>, "isVisible");
     lcb.add_function(l_anim_make_visible<animation>, "makeVisible");
     lcb.add_function(l_anim_make_invisible<animation>, "makeInvisible");
     lcb.add_function(l_anim_set_tag, "setTag");
@@ -727,6 +745,7 @@ void lua_register_anims(const lua_register_state* pState) {
     lcb.add_function(l_anim_set_speed<animation>, "setSpeed");
     lcb.add_function(l_anim_set_layer<animation>, "setLayer");
     lcb.add_function(l_anim_set_layers_from, "setLayersFrom");
+    lcb.add_function(l_anim_set_scale_factor<animation>, "setScaleFactor");
     lcb.add_function(l_anim_set_hitresult, "setHitTestResult");
     lcb.add_function(l_anim_get_primary_marker, "getPrimaryMarker");
     lcb.add_function(l_anim_get_secondary_marker, "getSecondaryMarker");
@@ -761,6 +780,8 @@ void lua_register_anims(const lua_register_state* pState) {
     lcb.add_function(l_srl_set_lifetime, "setLifetime");
     lcb.add_function(l_srl_set_use_intermediate_buffer,
                      "setUseIntermediateBuffer");
+    lcb.add_function(l_anim_set_scale_factor<sprite_render_list>,
+                     "setScaleFactor");
     lcb.add_function(l_srl_is_dead, "isDead");
     lcb.add_function(l_anim_set_tile<sprite_render_list>, "setTile",
                      lua_metatable::map);
@@ -768,6 +789,7 @@ void lua_register_anims(const lua_register_state* pState) {
     lcb.add_function(l_anim_set_flag_partial<sprite_render_list>,
                      "setPartialFlag");
     lcb.add_function(l_anim_get_flag<sprite_render_list>, "getFlag");
+    lcb.add_function(l_anim_is_visible<sprite_render_list>, "isVisible");
     lcb.add_function(l_anim_make_visible<sprite_render_list>, "makeVisible");
     lcb.add_function(l_anim_make_invisible<sprite_render_list>,
                      "makeInvisible");

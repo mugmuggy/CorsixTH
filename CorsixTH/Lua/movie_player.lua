@@ -43,7 +43,7 @@ local MoviePlayer = _G["MoviePlayer"]
 local calculateSize = function(me)
   -- calculate target dimensions
   local x, y, w, h, scale
-  local screen_w, screen_h = me.app.config.width, me.app.config.height
+  local screen_w, screen_h = me.app.video:getRenderSize()
   local native_w = me.moviePlayer:getNativeWidth()
   local native_h = me.moviePlayer:getNativeHeight()
   if native_w == 320 and native_h == 200 then
@@ -85,15 +85,10 @@ local destroyMovie = function(me)
   if me.opengl_mode_index then
     me.app.modes[me.opengl_mode_index] = "opengl"
   end
-  if me.channel >= 0 then
-    me.audio:releaseChannel(me.channel)
-    me.channel = -1
-  end
   if me.holding_bg_music then
     -- If possible we want to continue playing music where we were
     me.audio:pauseBackgroundTrack()
-  else
-    me.audio:playRandomBackgroundTrack()
+    me.holding_bg_music = false
   end
   if me.sound then
     me.audio:stopSound(me.sound)
@@ -164,7 +159,6 @@ function MoviePlayer:MoviePlayer(app, audio, video)
   self.video = video
   self.playing = false
   self.holding_bg_music = false
-  self.channel = -1
   self.sound = nil
   self.lose_movies = {}
   self.advance_movies = {}
@@ -185,7 +179,7 @@ function MoviePlayer:init()
   self.moviePlayer = TH.moviePlayer()
   self.moviePlayer:setRenderer(self.video)
 
-  local lose_palette = self.app.gfx:loadPalette("Bitmap", "lose.pl8", true, true)
+  local lose_palette = self.app.gfx:getPalette("lose.pl8")
   self.lose_font = self.app.gfx:loadFontAndSpriteTable("QData", "Font39v", false, lose_palette)
   self.lose_font_narrow = self.app.gfx:loadFontAndSpriteTable("QData", "Font40v", false, lose_palette)
 
@@ -322,7 +316,6 @@ function MoviePlayer:playMovie(filename, wait_for_stop, callback)
   -- Abort any loading of music
   self.audio.load_music = false
   if self.moviePlayer:hasAudioTrack() then
-    self.channel = self.audio:reserveChannel()
     if self.audio.background_music then
       self.holding_bg_music = self.audio:pauseBackgroundTrack()
     end
@@ -349,7 +342,7 @@ function MoviePlayer:playMovie(filename, wait_for_stop, callback)
     self.app.modes[self.opengl_mode_index] = ""
   end
 
-  warning = self.moviePlayer:play(self.channel)
+  warning = self.moviePlayer:play()
   if warning ~= nil and warning ~= "" then
     local message = "MoviePlayer:playMovie - Warning: " .. warning
     if self.app.world then

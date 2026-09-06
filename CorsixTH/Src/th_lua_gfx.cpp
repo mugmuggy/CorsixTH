@@ -22,9 +22,14 @@ SOFTWARE.
 
 #include "config.h"
 
-#include <SDL_stdinc.h>
+#include <SDL3/SDL.h>
 #include <ft2build.h>  // IWYU pragma: keep
+
+#include <cmath>
 // IWYU pragma: no_include "freetype/config/ftheader.h"
+#ifdef WITH_TRACY
+#include <tracy/Tracy.hpp>
+#endif
 
 #include <algorithm>
 #include <climits>
@@ -97,6 +102,8 @@ int l_rawbitmap_set_pal(lua_State* L) {
 }
 
 int l_rawbitmap_load(lua_State* L) {
+  ZoneScoped;
+
   raw_bitmap* pBitmap = luaT_testuserdata<raw_bitmap>(L);
   size_t iDataLen;
   const uint8_t* pData = luaT_checkfile(L, 2, &iDataLen);
@@ -124,19 +131,21 @@ int l_rawbitmap_load(lua_State* L) {
 }
 
 int l_rawbitmap_draw(lua_State* L) {
+  ZoneScoped;
+
   raw_bitmap* pBitmap = luaT_testuserdata<raw_bitmap>(L);
   render_target* pCanvas = luaT_testuserdata<render_target>(L, 2);
 
   if (lua_gettop(L) >= 8) {
-    pBitmap->draw(pCanvas, static_cast<int>(luaL_checkinteger(L, 3)),
-                  static_cast<int>(luaL_checkinteger(L, 4)),
+    pBitmap->draw(pCanvas, static_cast<float>(luaL_checknumber(L, 3)),
+                  static_cast<float>(luaL_checknumber(L, 4)),
                   static_cast<int>(luaL_checkinteger(L, 5)),
                   static_cast<int>(luaL_checkinteger(L, 6)),
                   static_cast<int>(luaL_checkinteger(L, 7)),
                   static_cast<int>(luaL_checkinteger(L, 8)));
   } else
-    pBitmap->draw(pCanvas, static_cast<int>(luaL_optinteger(L, 3, 0)),
-                  static_cast<int>(luaL_optinteger(L, 4, 0)));
+    pBitmap->draw(pCanvas, static_cast<float>(luaL_optnumber(L, 3, 0)),
+                  static_cast<float>(luaL_optnumber(L, 4, 0)));
 
   lua_settop(L, 1);
   return 1;
@@ -158,6 +167,8 @@ int l_spritesheet_set_pal(lua_State* L) {
 }
 
 int l_spritesheet_load(lua_State* L) {
+  ZoneScoped;
+
   sprite_sheet* pSheet = luaT_testuserdata<sprite_sheet>(L);
   size_t iDataLenTable, iDataLenChunk;
   const uint8_t* pDataTable = luaT_checkfile(L, 2, &iDataLenTable);
@@ -200,15 +211,17 @@ int l_spritesheet_size(lua_State* L) {
 }
 
 int l_spritesheet_draw(lua_State* L) {
+  ZoneScoped;
+
   sprite_sheet* pSheet = luaT_testuserdata<sprite_sheet>(L);
   render_target* pCanvas = luaT_testuserdata<render_target>(L, 2);
   int iSprite =
       static_cast<int>(luaL_checkinteger(L, 3));  // No array adjustment
 
-  int x = static_cast<int>(luaL_optinteger(L, 4, 0));
-  int y = static_cast<int>(luaL_optinteger(L, 5, 0));
+  float x = static_cast<float>(luaL_optnumber(L, 4, 0));
+  float y = static_cast<float>(luaL_optnumber(L, 5, 0));
 
-  int scaleFactor = 1;
+  int scale_factor = 1;
   uint32_t flags = 0;
   int arg6type = lua_type(L, 6);
   if (arg6type == LUA_TTABLE) {
@@ -217,26 +230,33 @@ int l_spritesheet_draw(lua_State* L) {
     lua_pop(L, 1);
 
     lua_getfield(L, 6, "scaleFactor");
-    scaleFactor = static_cast<int>(luaL_optinteger(L, -1, 1));
+    scale_factor = static_cast<int>(luaL_optinteger(L, -1, 1));
     lua_pop(L, 1);
   } else if (arg6type != LUA_TNONE) {
     luaL_error(L, "Expected table for draw options");
   }
 
+  // TODO: Support float coordinates
   pSheet->draw_sprite(pCanvas, iSprite, x, y, flags, 0, animation_effect::none,
-                      scaleFactor);
+                      scale_factor);
 
   lua_settop(L, 1);
   return 1;
 }
 
 int l_spritesheet_hittest(lua_State* L) {
+  ZoneScoped;
+
   sprite_sheet* pSheet = luaT_testuserdata<sprite_sheet>(L);
   size_t iSprite = luaL_checkinteger(L, 2);
-  int iX = static_cast<int>(luaL_checkinteger(L, 3));
-  int iY = static_cast<int>(luaL_checkinteger(L, 4));
+  float iX = static_cast<float>(luaL_checknumber(L, 3));
+  float iY = static_cast<float>(luaL_checknumber(L, 4));
   uint32_t iFlags = static_cast<uint32_t>(luaL_optinteger(L, 5, 0));
-  return pSheet->hit_test_sprite(iSprite, iX, iY, iFlags);
+
+  int x = static_cast<int>(std::roundf(iX));
+  int y = static_cast<int>(std::roundf(iY));
+
+  return pSheet->hit_test_sprite(iSprite, x, y, iFlags);
 }
 
 int l_spritesheet_isvisible(lua_State* L) {
@@ -256,14 +276,28 @@ int l_bitmap_font_new(lua_State* L) {
 }
 
 int l_bitmap_font_set_spritesheet(lua_State* L) {
+  // Note: l_freetype_font_set_spritesheet and l_bitmap_font_set_spritesheet
+  // differ in their expected arguments.
+
   bitmap_font* pFont = luaT_testuserdata<bitmap_font>(L);
   sprite_sheet* pSheet = luaT_testuserdata<sprite_sheet>(L, 2);
-  // Note: l_freetype_font_set_spritesheet has additional RGB parameters for
-  // the colour.
+  int charset_idx = static_cast<int>(luaL_optinteger(L, 3, 1));
+
+  bitmap_font_character_set charset;
+  switch (charset_idx) {
+    case 1:
+      charset = bitmap_font_character_set::cp437;
+      break;
+    case 2:
+      charset = bitmap_font_character_set::mik;
+      break;
+    default:
+      return luaL_argerror(L, 3, "Invalid character set");
+  }
 
   lua_settop(L, 2);
 
-  pFont->set_sprite_sheet(pSheet);
+  pFont->set_sprite_sheet(pSheet, charset);
   luaT_setenvfield(L, 1, "sprites");
   return 1;
 }
@@ -376,6 +410,8 @@ argb_colour read_color_from_lua(lua_State* L, argb_colour defaultColor) {
 //! @param L Lua stack
 //! @return argument count
 int l_freetype_font_set_font_options(lua_State* L) {
+  ZoneScoped;
+
   // Colour 0 falls back to using the average colour of the sprite sheet.
   int width = 0;
   int height = 0;
@@ -467,6 +503,8 @@ int l_font_get_size(lua_State* L) {
   size_t iMsgLen;
   const char* sMsg = luaT_checkstring(L, 2, &iMsgLen);
 
+  ZoneScoped;
+
   int iMaxWidth = INT_MAX;
   if (!lua_isnoneornil(L, 3))
     iMaxWidth = static_cast<int>(luaL_checkinteger(L, 3));
@@ -481,6 +519,8 @@ int l_font_get_size(lua_State* L) {
 }
 
 int l_font_draw(lua_State* L) {
+  ZoneScoped;
+
   font* pFont = luaT_getfont(L);
   render_target* pCanvas = nullptr;
   if (!lua_isnoneornil(L, 2)) {
@@ -488,8 +528,8 @@ int l_font_draw(lua_State* L) {
   }
   size_t iMsgLen;
   const char* sMsg = luaT_checkstring(L, 3, &iMsgLen);
-  int iX = static_cast<int>(luaL_checkinteger(L, 4));
-  int iY = static_cast<int>(luaL_checkinteger(L, 5));
+  float iX = static_cast<float>(luaL_checknumber(L, 4));
+  float iY = static_cast<float>(luaL_checknumber(L, 5));
 
   text_alignment eAlign = text_alignment::center;
   if (!lua_isnoneornil(L, 8)) {
@@ -508,27 +548,31 @@ int l_font_draw(lua_State* L) {
   }
 
   text_layout oDrawArea = pFont->get_text_dimensions(sMsg, iMsgLen);
+  float area_endx = static_cast<float>(oDrawArea.end_x);
+  float area_endy = static_cast<float>(oDrawArea.end_y);
   if (!lua_isnoneornil(L, 7)) {
     int iW = static_cast<int>(luaL_checkinteger(L, 6));
     int iH = static_cast<int>(luaL_checkinteger(L, 7));
     if (iW > oDrawArea.end_x && eAlign != text_alignment::left) {
-      iX +=
-          (iW - oDrawArea.end_x) / ((eAlign == text_alignment::center) ? 2 : 1);
+      iX += std::ceil((static_cast<float>(iW) - area_endx) /
+                      ((eAlign == text_alignment::center) ? 2.0f : 1.0f));
     }
     if (iH > oDrawArea.end_y) {
-      iY += (iH - oDrawArea.end_y) / 2;
+      iY += std::ceil((static_cast<float>(iH) - area_endy) / 2);
     }
   }
   if (pCanvas != nullptr) {
     pFont->draw_text(pCanvas, sMsg, iMsgLen, iX, iY);
   }
-  lua_pushinteger(L, iY + oDrawArea.end_y);
-  lua_pushinteger(L, iX + oDrawArea.end_x);
+  lua_pushnumber(L, iY + area_endy);
+  lua_pushnumber(L, iX + area_endx);
 
   return 2;
 }
 
 int l_font_draw_wrapped(lua_State* L) {
+  ZoneScoped;
+
   font* pFont = luaT_getfont(L);
   render_target* pCanvas = nullptr;
   if (!lua_isnoneornil(L, 2)) {
@@ -536,8 +580,8 @@ int l_font_draw_wrapped(lua_State* L) {
   }
   size_t iMsgLen;
   const char* sMsg = luaT_checkstring(L, 3, &iMsgLen);
-  int iX = static_cast<int>(luaL_checkinteger(L, 4));
-  int iY = static_cast<int>(luaL_checkinteger(L, 5));
+  float iX = static_cast<float>(luaL_checknumber(L, 4));
+  float iY = static_cast<float>(luaL_checknumber(L, 5));
   int iW = static_cast<int>(luaL_checkinteger(L, 6));
 
   text_alignment eAlign = text_alignment::left;
@@ -576,29 +620,38 @@ int l_font_draw_wrapped(lua_State* L) {
 }
 
 int l_font_draw_tooltip(lua_State* L) {
+  ZoneScoped;
+
   font* pFont = luaT_getfont(L);
   render_target* pCanvas = luaT_testuserdata<render_target>(L, 2);
   size_t iMsgLen;
   const char* sMsg = luaT_checkstring(L, 3, &iMsgLen);
-  int iX = static_cast<int>(luaL_checkinteger(L, 4));
-  int iY = static_cast<int>(luaL_checkinteger(L, 5));
+  float iX = static_cast<float>(luaL_checknumber(L, 4));
+  float iY = static_cast<float>(luaL_checknumber(L, 5));
   int iW = static_cast<int>(luaL_optinteger(L, 6, 200));
-  int iScreenWidth = pCanvas->get_width();
+  float screen_width = static_cast<float>(pCanvas->get_size().width);
+
+  // Pixel align tooltips to avoid fuzzy text
+  iX = std::roundf(iX);
+  iY = std::roundf(iY);
 
   uint32_t iBlack = render_target::map_colour(0x00, 0x00, 0x00);
   uint32_t iWhite = render_target::map_colour(0xFF, 0xFF, 0xFF);
   text_layout oArea = pFont->draw_text_wrapped(nullptr, sMsg, iMsgLen, iX + 2,
                                                iY + 1, iW - 4, INT_MAX, 0);
-  int iLastX = iX + oArea.width + 3;
-  int iFirstY = iY - (oArea.end_y - iY) - 1;
 
-  int iXOffset = iLastX > iScreenWidth ? iScreenWidth - iLastX : 0;
-  int iYOffset = iFirstY < 0 ? -iFirstY : 0;
+  float area_width = static_cast<float>(oArea.width);
+  float area_endy = static_cast<float>(oArea.end_y);
+  float iLastX = iX + area_width + 3;
+  float iFirstY = iY - (area_endy - iY) - 1;
 
-  pCanvas->fill_rect(iBlack, iX + iXOffset, iFirstY + iYOffset, oArea.width + 3,
-                     oArea.end_y - iY + 2);
+  float iXOffset = iLastX > screen_width ? screen_width - iLastX : 0;
+  float iYOffset = iFirstY < 0 ? -iFirstY : 0;
+
+  pCanvas->fill_rect(iBlack, iX + iXOffset, iFirstY + iYOffset, area_width + 3,
+                     area_endy - iY + 2);
   pCanvas->fill_rect(iWhite, iX + iXOffset + 1, iFirstY + 1 + iYOffset,
-                     oArea.width + 1, oArea.end_y - iY);
+                     area_width + 1, area_endy - iY);
 
   pFont->draw_text_wrapped(pCanvas, sMsg, iMsgLen, iX + 2 + iXOffset,
                            iFirstY + 1 + iYOffset, iW - 4);
@@ -683,6 +736,8 @@ int l_cursor_new(lua_State* L) {
 }
 
 int l_cursor_load(lua_State* L) {
+  ZoneScoped;
+
   cursor* pCursor = luaT_testuserdata<cursor>(L);
   sprite_sheet* pSheet = luaT_testuserdata<sprite_sheet>(L, 2);
   if (pCursor->create_from_sprite(pSheet,
@@ -708,42 +763,48 @@ int l_cursor_position(lua_State* L) {
   render_target* pCanvas =
       luaT_testuserdata<render_target>(L, 1, luaT_upvalueindex(1));
   lua_pushboolean(L, cursor::set_position(
-                         pCanvas, static_cast<int>(luaL_checkinteger(L, 2)),
-                         static_cast<int>(luaL_checkinteger(L, 3)))
+                         pCanvas, static_cast<float>(luaL_checknumber(L, 2)),
+                         static_cast<float>(luaL_checknumber(L, 3)))
                          ? 1
                          : 0);
   return 1;
 }
 
+bool is_table_field_true(lua_State* L, int table_index, const char* key) {
+  lua_getfield(L, table_index, key);
+  bool result = lua_toboolean(L, -1);
+  lua_pop(L, 1);
+  return result;
+}
+
 /** Construct the helper structure for making a #THRenderTarget. */
 render_target_creation_params l_surface_creation_params(lua_State* L,
                                                         int iArgStart) {
-  render_target_creation_params params;
-  params.width = static_cast<int>(luaL_checkinteger(L, iArgStart));
-  params.height = static_cast<int>(luaL_checkinteger(L, iArgStart + 1));
-  params.min_width = static_cast<int>(luaL_checkinteger(L, iArgStart + 2));
-  params.min_height = static_cast<int>(luaL_checkinteger(L, iArgStart + 3));
+  window_size size = {static_cast<int>(luaL_checkinteger(L, iArgStart)),
+                      static_cast<int>(luaL_checkinteger(L, iArgStart + 1))};
 
-  params.fullscreen = false;
-  params.present_immediate = false;
-  params.direct_zoom = false;
+  window_size min_size = {
+      static_cast<int>(luaL_checkinteger(L, iArgStart + 2)),
+      static_cast<int>(luaL_checkinteger(L, iArgStart + 3))};
 
-  // Parse string arguments, looking for matching parameter names.
-  for (int iArg = iArgStart + 4, iArgCount = lua_gettop(L); iArg <= iArgCount;
-       ++iArg) {
-    const char* sOption = luaL_checkstring(L, iArg);
-    if (sOption[0] == 0) continue;
+  render_target_creation_params params{};
+  params.size = size;
+  params.min_size = min_size;
 
-    if (std::strcmp(sOption, "fullscreen") == 0) {
-      params.fullscreen = true;
-    }
-    if (std::strcmp(sOption, "present immediate") == 0) {
-      params.present_immediate = true;
-    }
-    if (std::strcmp(sOption, "direct zoom") == 0) {
-      params.direct_zoom = true;
-    }
+  // Parse the modes
+  int modes_idx = iArgStart + 4;
+  if (!lua_istable(L, modes_idx)) {
+    return params;
   }
+  params.fullscreen = is_table_field_true(L, modes_idx, "fullscreen");
+  params.maximized = is_table_field_true(L, modes_idx, "maximized");
+  params.present_immediate =
+      is_table_field_true(L, modes_idx, "present_immediate");
+  params.direct_zoom = is_table_field_true(L, modes_idx, "direct_zoom");
+  params.aspect_ratio_4_3 =
+      is_table_field_true(L, modes_idx, "aspect_ratio_4_3");
+  params.hidpi = is_table_field_true(L, modes_idx, "hidpi");
+  lua_pop(L, 1);
 
   return params;
 }
@@ -774,6 +835,8 @@ int l_surface_update(lua_State* L) {
 }
 
 int l_surface_fill_black(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
   lua_settop(L, 1);
   if (pCanvas->fill_black()) return 1;
@@ -782,7 +845,21 @@ int l_surface_fill_black(lua_State* L) {
   return 2;
 }
 
+int l_surface_fill_colour(lua_State* L) {
+  ZoneScoped;
+
+  render_target* pCanvas = luaT_testuserdata<render_target>(L);
+  uint32_t c = read_color_from_lua(L, 0xFF000000);
+  lua_settop(L, 2);
+  if (pCanvas->fill_colour(c)) return 1;
+  lua_pushnil(L);
+  lua_pushstring(L, pCanvas->get_last_error());
+  return 2;
+}
+
 int l_surface_start_frame(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
   lua_settop(L, 1);
   if (pCanvas->start_frame()) return 1;
@@ -792,6 +869,8 @@ int l_surface_start_frame(lua_State* L) {
 }
 
 int l_surface_end_frame(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
   lua_settop(L, 1);
   if (pCanvas->end_frame()) return 1;
@@ -801,6 +880,8 @@ int l_surface_end_frame(lua_State* L) {
 }
 
 int l_surface_nonoverlapping(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
   if (lua_isnone(L, 2) || lua_toboolean(L, 2) != 0)
     pCanvas->start_nonoverlapping_draws();
@@ -818,6 +899,8 @@ int l_surface_set_blue_filter_active(lua_State* L) {
 }
 
 int l_surface_map(lua_State* L) {
+  ZoneScoped;
+
   lua_pushnumber(
       L, (lua_Number)render_target::map_colour((Uint8)luaL_checkinteger(L, 2),
                                                (Uint8)luaL_checkinteger(L, 3),
@@ -826,12 +909,14 @@ int l_surface_map(lua_State* L) {
 }
 
 int l_surface_rect(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
   if (pCanvas->fill_rect(static_cast<uint32_t>(luaL_checkinteger(L, 2)),
-                         static_cast<int>(luaL_checkinteger(L, 3)),
-                         static_cast<int>(luaL_checkinteger(L, 4)),
-                         static_cast<int>(luaL_checkinteger(L, 5)),
-                         static_cast<int>(luaL_checkinteger(L, 6)))) {
+                         static_cast<float>(luaL_checknumber(L, 3)),
+                         static_cast<float>(luaL_checknumber(L, 4)),
+                         static_cast<float>(luaL_checknumber(L, 5)),
+                         static_cast<float>(luaL_checknumber(L, 6)))) {
     lua_settop(L, 1);
     return 1;
   }
@@ -841,6 +926,8 @@ int l_surface_rect(lua_State* L) {
 }
 
 int l_surface_screenshot(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
   const char* file_path = luaL_checkstring(L, 2);
   if (pCanvas->take_screenshot(file_path)) {
@@ -853,6 +940,8 @@ int l_surface_screenshot(lua_State* L) {
 }
 
 int l_surface_push_clip(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
   clip_rect rcClip;
   rcClip.x = static_cast<clip_rect::x_y_type>(luaL_checkinteger(L, 2));
@@ -865,25 +954,53 @@ int l_surface_push_clip(lua_State* L) {
 }
 
 int l_surface_pop_clip(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
   pCanvas->pop_clip_rect();
   lua_settop(L, 1);
   return 1;
 }
 
-int l_surface_get_width(lua_State* L) {
+int l_surface_get_render_size(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
-  lua_pushinteger(L, pCanvas->get_width());
-  return 1;
+  auto [width, height] = pCanvas->get_size();
+  lua_pushinteger(L, width);
+  lua_pushinteger(L, height);
+  return 2;
 }
 
-int l_surface_get_height(lua_State* L) {
+int l_surface_get_window_size(lua_State* L) {
+  ZoneScoped;
+
+  render_target* canvas = luaT_testuserdata<render_target>(L);
+  auto [width, height] = canvas->get_window_size();
+  lua_pushinteger(L, width);
+  lua_pushinteger(L, height);
+  return 2;
+}
+
+int l_surface_get_max_window_size(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
-  lua_pushinteger(L, pCanvas->get_height());
+  auto [width, height] = pCanvas->get_max_window_size();
+  lua_pushinteger(L, width);
+  lua_pushinteger(L, height);
+  return 2;
+}
+
+int l_surface_get_display_scale(lua_State* L) {
+  render_target* canvas = luaT_testuserdata<render_target>(L);
+  lua_pushnumber(L, canvas->get_display_scale());
   return 1;
 }
 
 int l_surface_scale(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
   scaled_items eToScale = scaled_items::none;
   if (lua_isnoneornil(L, 3)) {
@@ -912,6 +1029,8 @@ int l_surface_set_caption(lua_State* L) {
 }
 
 int l_surface_get_renderer_details(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
   lua_pushstring(L, pCanvas->get_renderer_details());
   return 1;
@@ -919,6 +1038,8 @@ int l_surface_get_renderer_details(lua_State* L) {
 
 // Lua to THRenderTarget->setWindowGrab
 int l_surface_set_capture_mouse(lua_State* L) {
+  ZoneScoped;
+
   render_target* pCanvas = luaT_testuserdata<render_target>(L);
   pCanvas->set_window_grab(
       (lua_isnoneornil(L, 2) != 0) ? false : (lua_toboolean(L, 2) != 0));
@@ -966,10 +1087,12 @@ int l_set_colour(lua_State* L) {
 }
 
 int l_line_draw(lua_State* L) {
+  ZoneScoped;
+
   line_sequence* pLine = luaT_testuserdata<line_sequence>(L);
   render_target* pCanvas = luaT_testuserdata<render_target>(L, 2);
-  pLine->draw(pCanvas, static_cast<int>(luaL_optinteger(L, 3, 0)),
-              static_cast<int>(luaL_optinteger(L, 4, 0)));
+  pLine->draw(pCanvas, static_cast<float>(luaL_optnumber(L, 3, 0)),
+              static_cast<float>(luaL_optnumber(L, 4, 0)));
 
   lua_settop(L, 1);
   return 1;
@@ -1091,6 +1214,7 @@ void lua_register_gfx(const lua_register_state* pState) {
                                          lua_metatable::surface);
     lcb.add_function(l_surface_update, "update");
     lcb.add_function(l_surface_fill_black, "fillBlack");
+    lcb.add_function(l_surface_fill_colour, "fillColour");
     lcb.add_function(l_surface_start_frame, "startFrame");
     lcb.add_function(l_surface_end_frame, "endFrame");
     lcb.add_function(l_surface_nonoverlapping, "nonOverlapping");
@@ -1099,8 +1223,10 @@ void lua_register_gfx(const lua_register_state* pState) {
     lcb.add_function(l_surface_rect, "drawRect");
     lcb.add_function(l_surface_push_clip, "pushClip");
     lcb.add_function(l_surface_pop_clip, "popClip");
-    lcb.add_function(l_surface_get_width, "getWidth");
-    lcb.add_function(l_surface_get_height, "getHeight");
+    lcb.add_function(l_surface_get_render_size, "getRenderSize");
+    lcb.add_function(l_surface_get_window_size, "getWindowSize");
+    lcb.add_function(l_surface_get_max_window_size, "getMaxWindowSize");
+    lcb.add_function(l_surface_get_display_scale, "getWindowDisplayScale");
     lcb.add_function(l_surface_screenshot, "takeScreenshot");
     lcb.add_function(l_surface_scale, "scale");
     lcb.add_function(l_surface_set_caption, "setCaption");

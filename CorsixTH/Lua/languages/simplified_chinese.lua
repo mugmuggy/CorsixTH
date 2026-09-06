@@ -3366,9 +3366,7 @@ options_window = {
   option_enabled = "已启用",
   option_disabled = "已禁用",
   fullscreen = "全屏幕",
-  resolution = "分辨率",
   capture_mouse = "捕获鼠标",
-  custom_resolution = "自定义...",
   width = "宽度",
   height = "高度",
   customise = "自定义",
@@ -3387,8 +3385,6 @@ options_window = {
 tooltip.options_window = {
   fullscreen = "应该在全屏还是窗口模式运行",
   fullscreen_button = "点击切换全屏模式",
-  resolution = "在此分辨率下运行游戏",
-  select_resolution = "选择新的分辨率",
   capture_mouse = "点击切换是否将光标捕获在游戏窗口中",
   width = "输入想要的屏幕宽度",
   height = "输入想要的屏幕高度",
@@ -3480,7 +3476,7 @@ tooltip.folders_window = {
   no_font_specified = "没有指定字体的位置！",
   not_specified = "没有指定文件夹位置！",
   default = "默认位置",
-  reset_to_default = "重置到默认文件夹",
+  reset_to_default = "重置到默认文件夹 ( %1% )",
   back = "关闭此菜单，并返回设置菜单",
 }
 
@@ -3878,6 +3874,3 @@ multiplayer.everyone_failed = "所有玩家都没有完成最终目标。因此�
 
 --------------------------------  UNUSED  -----------------------------------
 ------------------- (kept for backwards compatibility) ----------------------
-
-options_window.change_resolution = "更改分辨率"
-tooltip.options_window.change_resolution = "更改窗口分辨率为左方的值"

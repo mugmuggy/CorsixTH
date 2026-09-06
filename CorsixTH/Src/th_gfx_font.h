@@ -24,7 +24,7 @@ SOFTWARE.
 #define CORSIX_TH_TH_GFX_FONT_H_
 #include "config.h"
 
-#include <SDL_render.h>
+#include <SDL3/SDL.h>
 #include <ft2build.h>  // IWYU pragma: keep
 // IWYU pragma: no_include "freetype/config/ftheader.h"
 
@@ -40,6 +40,8 @@ enum class text_alignment {
   center = 1,
   right = 2,
 };
+
+enum class bitmap_font_character_set { cp437, mik };
 
 /** Structure for the bounds of a text string that is rendered to the screen. */
 struct text_layout {
@@ -108,7 +110,7 @@ class font {
           rectangle for the drawn text.
   */
   virtual void draw_text(render_target* pCanvas, const char* sMessage,
-                         size_t iMessageLength, int iX, int iY) const = 0;
+                         size_t iMessageLength, float iX, float iY) const = 0;
 
   //! Draw a single line of text, splitting it at word boundaries
   /*!
@@ -130,7 +132,7 @@ class font {
   */
   virtual text_layout draw_text_wrapped(
       render_target* pCanvas, const char* sMessage, size_t iMessageLength,
-      int iX, int iY, int iWidth, int iMaxRows = INT_MAX, int iSkipRows = 0,
+      float iX, float iY, int iWidth, int iMaxRows = INT_MAX, int iSkipRows = 0,
       text_alignment eAlign = text_alignment::left) const = 0;
 };
 
@@ -143,8 +145,12 @@ class bitmap_font final : public font {
       The sprite sheet should have the space character (ASCII 0x20) at sprite
       index 1, and other ASCII characters following on in simple order (i.e.
       '!' (ASCII 0x21) at index 2, 'A' (ASCII 0x41) at index 34, etc.)
+      \param pSpriteSheet The sprite sheet to use for the font.
+      \param character_set The character set to use when mapping unicode to
+         sprite indexes.
   */
-  void set_sprite_sheet(sprite_sheet* pSpriteSheet);
+  void set_sprite_sheet(sprite_sheet* pSpriteSheet,
+                        bitmap_font_character_set character_set);
 
   void set_scale_factor(int factor);
 
@@ -161,11 +167,11 @@ class bitmap_font final : public font {
                                   int iMaxWidth = INT_MAX) const override;
 
   void draw_text(render_target* pCanvas, const char* sMessage,
-                 size_t iMessageLength, int iX, int iY) const override;
+                 size_t iMessageLength, float iX, float iY) const override;
 
   text_layout draw_text_wrapped(
       render_target* pCanvas, const char* sMessage, size_t iMessageLength,
-      int iX, int iY, int iWidth, int iMaxRows = INT_MAX, int iSkipRows = 0,
+      float iX, float iY, int iWidth, int iMaxRows = INT_MAX, int iSkipRows = 0,
       text_alignment eAlign = text_alignment::left) const override;
 
  private:
@@ -173,6 +179,7 @@ class bitmap_font final : public font {
   int letter_spacing{};
   int line_spacing{};
   int scale_factor{1};
+  bitmap_font_character_set character_set{bitmap_font_character_set::cp437};
 };
 
 //! Adaptor around the FreeType2 library to a THFont.
@@ -249,11 +256,11 @@ class freetype_font final : public font {
                                   int iMaxWidth = INT_MAX) const override;
 
   void draw_text(render_target* pCanvas, const char* sMessage,
-                 size_t iMessageLength, int iX, int iY) const override;
+                 size_t iMessageLength, float iX, float iY) const override;
 
   text_layout draw_text_wrapped(
       render_target* pCanvas, const char* sMessage, size_t iMessageLength,
-      int iX, int iY, int iWidth, int iMaxRows = INT_MAX, int iSkipRows = 0,
+      float iX, float iY, int iWidth, int iMaxRows = INT_MAX, int iSkipRows = 0,
       text_alignment eAlign = text_alignment::left) const override;
 
  private:
@@ -356,8 +363,8 @@ class freetype_font final : public font {
       @param iX The X position at which to draw the texture on the canvas.
       @param iY The Y position at which to draw the texture on the canvas.
   */
-  void draw_texture(render_target* pCanvas, cached_text* pCacheEntry, int iX,
-                    int iY) const;
+  void draw_texture(render_target* pCanvas, cached_text* pCacheEntry, float iX,
+                    float iY) const;
 };
 
 #endif  // CORSIX_TH_TH_GFX_FONT_H_

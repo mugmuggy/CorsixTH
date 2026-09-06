@@ -15,10 +15,11 @@ A reimplementation of the 1997 Bullfrog business sim Theme Hospital. As well as 
 You will need the following:
 
 - Grab the latest installer for your system:
-   - Windows and macOS builds can be downloaded directly from [releases](https://github.com/CorsixTH/CorsixTH/releases).
+   - Windows and macOS builds, and an AppImage for Linux can be downloaded directly from [releases](https://github.com/CorsixTH/CorsixTH/releases).
    - Linux and BSD repositories use either corsixth or corsix-th names [packaged versions](https://repology.org/metapackage/corsixth).
    - A Flatpak for Linux users is available on [Flathub](https://flathub.org/apps/details/com.corsixth.corsixth).
    - A Snap for Linux users is available on [Snapcraft](https://snapcraft.io/corsixth) [(support page)](https://github.com/snapcrafters/corsixth).
+   - An unofficial Anylinux AppImage is available from [Pkgforge](https://github.com/pkgforge-dev/CorsixTH-AppImage-Enhanced).
 - We use graphics, sound and other data from the original game so one of the following is required:
    - Original game CD from eBay etc. or your dusty bookshelf :smile:
    - A download from [GOG.com](https://www.gog.com/game/theme_hospital) or [EA](https://www.ea.com/games/theme/theme-hospital)
@@ -29,32 +30,38 @@ You will need the following:
 Most features of the game are available -- and we're at a state where you can complete the full campaign without issue.
 ##### Original Features #####
 - Single player campaign
-- All diseases, objects, rooms are available (see below section for outstanding anomalies)
+- All diseases, objects, rooms are available
 - All events (emergencies, earthquakes, epidemics, VIP visits)
 - Management windows (managing staff, patients, policies etc.)
-- Music/Jukebox and gameplay videos (see below section for outstanding anomalies)
+- Music/Jukebox
+- Gameplay videos
 - Cheats (naughty!)
+  
 ##### New Features #####
 - Custom levels and campaigns
-- Full HD support
+- Full HD and 4K support
 - Zooming
-- Make your own maps and levels
-- Unlimited saves and 12 autosave slots
+- UI scaling
+- Subtitles
+- More than 20 different languages
+- Make your own maps and levels with built-in map editor
+- Unlimited save files
 - Play your own music!
+- Option to build rooms while paused
 - Option to remove destroyed rooms for a fee
 - Improved game logic
 - Full control over all hotkeys
+- Machine menu
+- Adviser messages history 
 
 ### What's missing/needs improvement? ###
 There are some areas of the game still missing, and while we work to get them integrated any additional help from the community is always appreciated!
 - Multiplayer/LAN
 - AI Hospitals (and the components associated with it)
-- Level skipping cheat (on level progression board)
-- Rats (but rat holes are present) and the special rat level
+- Rats (but rat holes are present) and the bonus rat level
+- Vomit waves
 - Win level video/letter
-- Newspaper headlines on lose level
 - The original graphics do not have a complete set for Pregnancy, Alien DNA, and female Fractured Bones patients -- these may cause anomalies if you enable regular spawning in settings
-- Patients have an astounding ability to always remain upright (can't fall over in earthquakes)
 - Some objects in the game may glitch with walls
 
 ## Developers
@@ -67,7 +74,7 @@ You can also [click here](https://github.com/CorsixTH/CorsixTH/issues?q=is%3Aiss
 We still have features to add and bugs to fix, check out the issue tracker [here](https://github.com/CorsixTH/CorsixTH/issues). Want to talk about adding a feature? post on our Google group or [contact us](#Contact).
 
 ###### Translation ######
-CorsixTH has translations for 19 languages, some need updates. Read our [wiki](https://github.com/CorsixTH/CorsixTH/wiki/Localization) for more information.
+CorsixTH has translations for more than 20 different languages, some of which need updating. Read our [wiki](https://github.com/CorsixTH/CorsixTH/wiki/Localization) for more information.
 
 ## More
 

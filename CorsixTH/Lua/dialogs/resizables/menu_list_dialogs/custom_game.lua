@@ -76,7 +76,7 @@ function UICustomGame:UICustomGame(ui)
 
   -- Now add the free build button beside the list.
   if not pcall(function()
-    local palette = ui.app.gfx:loadPalette("QData", "DrugN01V.pal", true)
+    local palette = ui.app.gfx:getPalette("DrugN01V.pal")
     self.panel_sprites = ui.app.gfx:loadSpriteTable("QData", "DrugN02V", true, palette)
     self.border_sprites = ui.app.gfx:loadSpriteTable("Bitmap", "aux_ui", true)
   end) then
@@ -110,8 +110,8 @@ function UICustomGame:buttonClicked(num)
   self.chosen_level_name = item.name
   self.chosen_level_description = item.intro
   if self.chosen_level_description then
-    local _, y, rows = self.label_font:sizeOf(self.chosen_level_description, details_width * TheApp.config.ui_scale)
-    local row_height = y / rows / TheApp.config.ui_scale
+    local _, y, rows = self.label_font:sizeOf(self.chosen_level_description, details_width * TheApp.gfx:getUIScale())
+    local row_height = y / rows / TheApp.gfx:getUIScale()
     self.max_rows_shown = math.floor(self.num_rows * 17 / row_height)
     self.details_scrollbar:setRange(1, rows, math.min(rows, self.max_rows_shown), 1)
   else
@@ -145,7 +145,7 @@ end
 
 function UICustomGame:draw(canvas, x, y)
   UIMenuList.draw(self, canvas, x, y)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   x, y = self.x * s + x, self.y * s + y
 
   if self.chosen_level_name then

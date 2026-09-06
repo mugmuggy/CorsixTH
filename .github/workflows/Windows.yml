@@ -1,6 +1,10 @@
 ---
 name: Windows
 
+permissions:
+  contents: read
+  pull-requests: read
+
 on:
   push:
     branches-ignore:
@@ -16,6 +20,7 @@ on:
           - win-dev
           - win-x64-rel
           - win-x86-rel
+          - win-arm64-rel
       animview:
         description: 'Build AnimView?'
         default: 'false'
@@ -26,88 +31,90 @@ on:
 
 jobs:
   Windows:
-    runs-on: windows-2022
+    runs-on: ${{inputs.preset == 'win-arm64-rel' && 'windows-11-arm' || 'windows-2022'}}
     env:
       PRESET: ${{inputs.preset || 'win-x64-rel'}}
       ANIMVIEW: ${{inputs.animview && 'ON' || 'OFF'}}
-      NAME: CorsixTH${{inputs.animview && '_and_AnimView' || ''}}${{inputs.preset == 'win-x86-rel' && '_x86' || ''}}
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg_cache,readwrite
+      NAME: CorsixTH${{inputs.animview && '_and_AnimView' || ''}}${{inputs.preset == 'win-x86-rel' && '_x86' || inputs.preset == 'win-arm64-rel' && '_arm64' || ''}}
+      VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
     defaults:
       run:
         shell: bash
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Checkout selected PR
         env:
           GH_TOKEN: ${{github.token}}
-        if: inputs.PR
+        if: inputs.pr
         run: gh pr checkout --repo CorsixTH/CorsixTH ${{inputs.pr}}
 
-      - name: Restore vcpkg cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ github.workspace }}/vcpkg_cache
-          key: vcpkg-${{env.PRESET}}-${{hashFiles('vcpkg.json','vcpkg-configuration.json')}}
-          restore-keys: vcpkg-${{env.PRESET}}-
-
-      - name: Get CMake
-        uses: lukka/get-cmake@v3.28.3
-
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgJsonGlob: 'vcpkg.json'
-          vcpkgConfigurationJsonGlob: 'vcpkg-configuration.json'
-
-      - name: Run CMake dev configure
-        if: inputs.PRESET == 'win-dev'
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: 'win-dev'
-
-      - name: Run CMake release build
-        if: inputs.PRESET != 'win-dev'
-        uses: lukka/run-cmake@v10
-        with:
-          configurePreset: ${{env.PRESET}}
-          configurePresetAdditionalArgs: "['-DBUILD_ANIMVIEW=${{env.ANIMVIEW}}',
-            '-DCMAKE_INSTALL_PREFIX=build/${{env.PRESET}}/CorsixTH/RelWithDebInfo/']"
-          buildPreset: ${{env.PRESET}}
-          buildPresetAdditionalArgs: "['--verbose', '--target install']"
-          testPreset: ${{env.PRESET}}
-
-      - name: Save vcpkg cache
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/vcpkg_cache
-          key: vcpkg-${{env.PRESET}}-${{hashFiles('vcpkg.json','vcpkg-configuration.json')}}
-
-      - name: Download soundfont
-        if: inputs.PRESET != 'win-dev'
+      - name: Extract vcpkg baseline
+        id: vcpkg-baseline
+        shell: pwsh
         run: |
-          aria2c -d "build/${{env.PRESET}}/CorsixTH/RelWithDebInfo" \
-            https://raw.githubusercontent.com/Jacalz/fluid-soundfont/master/SF3/FluidR3.sf3
+          $config = Get-Content vcpkg-configuration.json | ConvertFrom-Json
+          $baseline = $config.'default-registry'.baseline
+          Write-Host "vcpkg baseline: $baseline"
+          echo "baseline=$baseline" >> $env:GITHUB_OUTPUT
 
-      - name: Copy data files for archive
-        if: inputs.PRESET != 'win-dev'
+      - name: Checkout vcpkg
+        uses: actions/checkout@v6
+        with:
+          repository: 'microsoft/vcpkg'
+          ref: ${{ steps.vcpkg-baseline.outputs.baseline }}
+          fetch-depth: 0
+          path: vcpkg
+
+      - name: Bootstrap vcpkg
+        shell: cmd
         run: |
-          cp -r build/${{env.PRESET}}/. .
-          cp -Ru CorsixTH/RelWithDebInfo/CorsixTH/. CorsixTH/RelWithDebInfo/
-          rm -rf CorsixTH/RelWithDebInfo/CorsixTH/
-          if [ "${{inputs.animview}}" == "true" ]; then
-            mkdir -p artifact
-            mv AnimView/RelWithDebInfo artifact/AnimView
-            mv CorsixTH/RelWithDebInfo artifact/CorsixTH
-          else
-            mv CorsixTH/RelWithDebInfo artifact
-          fi
+          cd "%VCPKG_ROOT%"
+          bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Setup binary cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-bincache-${{env.PRESET}}-${{hashFiles('vcpkg.json','vcpkg-configuration.json')}}
+          restore-keys: vcpkg-bincache-${{env.PRESET}}-
+
+      - name: Ensure directories exist
+        run: |
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+          mkdir -p artifact
+
+      - name: Run CMake configure
+        shell: cmd
+        run: |
+          cmake --preset "%PRESET%" -DVCPKG_INSTALL_OPTIONS="--x-abi-tools-use-exact-versions" -DBUILD_ANIMVIEW=%ANIMVIEW%
+
+      - name: Run CMake build
+        shell: cmd
+        run: |
+          cmake --build --preset "%PRESET%" --verbose
+
+      - name: Run CTest
+        shell: cmd
+        run: |
+          ctest --preset "%PRESET%"
+
+      - name: Run CMake install
+        if: env.PRESET != 'win-dev'
+        shell: cmd
+        run: |
+          cmake --install build/%PRESET% --prefix ./artifact --config RelWithDebInfo
+
+      - name: List the artifact files
+        if: env.PRESET != 'win-dev'
+        run: |
           ls -R artifact
 
       - name: Upload build
-        if: inputs.PRESET != 'win-dev'
-        uses: actions/upload-artifact@v4
+        if: env.PRESET != 'win-dev'
+        uses: actions/upload-artifact@v6
         with:
-          path: artifact
+          path: ${{ inputs.animview && 'artifact' || 'artifact/CorsixTH' }}
           name: ${{env.NAME}}

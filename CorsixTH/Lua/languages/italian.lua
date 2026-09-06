@@ -18,11 +18,23 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
+-- Translator warning:
+-- Theme Hospital's original bitmap fonts have a limited character set, and
+-- some letters are missing; supported characters are case-sensitive.
+-- Unsupported characters appear as "?" in game. See the supported characters:
+-- https://github.com/CorsixTH/CorsixTH/wiki/Localization
+-- Translators may use plain-character substitutions (for example, "e" for an
+-- accented "e").
+-- If substitutions are unsuitable, change Font("cp437") to Font("unicode")
+-- to use the Unicode font instead. You may translate this note into this
+-- file's language if that would help other translators.
 
+Font("cp437")
 Language("Italiano", "Italian", "it", "ita")
 Inherit("english")
 Inherit("original_strings", 3)
 Encoding(utf8)
+IsArabicNumerals(true)
 
 -- override
 -- TODO? Any more original strings that are off in italian translation?
@@ -358,9 +370,7 @@ options_window = {
   option_on = "On",
   option_off = "Off",
   fullscreen = "Schermo intero",
-  resolution = "Risoluzione",
   capture_mouse = "Cattura Mouse",
-  custom_resolution = "Personalizzata...",
   width = "Largh",
   option_enabled = "Attiv.",
   height = "Alt",
@@ -387,8 +397,6 @@ options_window = {
 tooltip.options_window = {
   fullscreen = "Decidi se il gioco verrà eseguito a schermo intero o in finestra",
   fullscreen_button = "Clicca per attivare o disattivare la modalità a schermo intero",
-  resolution = "La risoluzione alla quale verrà eseguito il gioco",
-  select_resolution = "Seleziona una nuova risoluzione",
   capture_mouse = "Clicca per attivare o disattivare la cattura del puntatore all'interno della finestra di gioco",
   width = "Inserisci la larghezza dello schermo desiderata",
   height = "Inserisci l'altezza dello schermo desiderata",
@@ -486,7 +494,7 @@ tooltip.folders_window = {
   no_font_specified = "Non è stata ancora specificata nessuna posizione per il font!",
   not_specified = "Non è stato ancora specificato nessun percorso per la cartella!",
   default = "Posizione di default",
-  reset_to_default = "Ripristina la cartella al suo percorso originario",
+  reset_to_default = "Ripristina la cartella al suo percorso originario ( %1% )",
   back  = "Chiudi questo menù e torna al menù delle impostazioni",
 }
 
@@ -901,9 +909,6 @@ multiplayer.players_failed = "I seguenti giocatori non sono riusciti a raggiunge
 
 --------------------------------  UNUSED  -----------------------------------
 ------------------- (kept for backwards compatibility) ----------------------
-
-options_window.change_resolution = "Cambia risoluzione"
-tooltip.options_window.change_resolution = "Cambia la risoluzione della finestra con le dimensioni inserite a sinistra"
 
 -- I added those lines because I didn't like 'em to show up in every diff dump!
 original_credits[302] = ","

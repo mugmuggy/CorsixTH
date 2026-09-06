@@ -193,7 +193,7 @@ function UIFurnishCorridor:confirm()
 
   if self.edit_dialog then
     self.edit_dialog:addObjects(to_purchase, false) -- payment already handled here
-    self.edit_dialog:removeObjects(to_sell, false) -- payment already handled here
+    self.edit_dialog:removeObjects(to_sell) -- payment already handled here
     self:close()
   else
     if #to_purchase == 0 then
@@ -215,7 +215,7 @@ end
 function UIFurnishCorridor:draw(canvas, x, y)
   Window.draw(self, canvas, x, y)
 
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   x, y = x + self.x * s, y + self.y * s
   self.white_font:draw(canvas, self.title_text, x + 163 * s, y + 18 * s)
   self.white_font:draw(canvas, self.price_text .. self.item_price, x + 24 * s, y + 173 * s)
@@ -230,15 +230,14 @@ function UIFurnishCorridor:draw(canvas, x, y)
     font:draw(canvas, o.qty, x + 306 * s, y + 20 * s + i * 19 * s, 19 * s, 0)
   end
 
-  canvas:scale(s)
-  self.preview_anim:draw(canvas, math.floor(x / s) + 72, math.floor(y / s) + 57)
-  canvas:scale(1)
+  self.preview_anim:setScaleFactor(s)
+  self.preview_anim:draw(canvas, x + 72 * s, y + 57 * s)
 end
 
 function UIFurnishCorridor:onMouseMove(x, y, dx, dy)
   local repaint = Window.onMouseMove(self, x, y, dx, dy)
 
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   local hover_idx = 0
   if 158 * s <= x and x < 346 * s and 34 * s <= y and y < 224 * s then
     hover_idx = math_floor((y - 15 * s) / (19 * s))

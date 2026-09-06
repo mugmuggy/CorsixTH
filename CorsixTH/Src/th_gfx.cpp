@@ -917,10 +917,11 @@ bool animation_manager::hit_test(size_t iFrame, const ::layers& oLayers, int iX,
 }
 
 void animation_manager::draw_frame(render_target* pCanvas, size_t iFrame,
-                                   const ::layers& oLayers, int iX, int iY,
+                                   const ::layers& oLayers, float iX, float iY,
                                    uint32_t iFlags,
                                    animation_effect patient_effect,
-                                   size_t patient_effect_offset) const {
+                                   size_t patient_effect_offset,
+                                   int scale_factor) const {
   if (iFrame >= frame_count) {
     return;
   }
@@ -963,20 +964,25 @@ void animation_manager::draw_frame(render_target* pCanvas, size_t iFrame,
         (oElement.layer > 0 || oElement.layer_id > 0) ? patient_effect
                                                       : animation_effect::none;
     size_t effect_ticks = game_ticks + patient_effect_offset;
+    float oex = static_cast<float>(oElement.x * scale_factor);
+    float oey = static_cast<float>(oElement.y * scale_factor);
     if (iFlags & thdf_flip_horizontal) {
       int iWidth;
       int iHeight;
       oElement.element_sprite_sheet->get_sprite_size_unchecked(
           oElement.sprite, &iWidth, &iHeight);
+      iWidth *= scale_factor;
+      iHeight *= scale_factor;
 
       oElement.element_sprite_sheet->draw_sprite(
-          pCanvas, oElement.sprite, iX - oElement.x - iWidth, iY + oElement.y,
-          iPassOnFlags | (oElement.flags ^ thdf_flip_horizontal), effect_ticks,
-          render_effect);
+          pCanvas, oElement.sprite, iX - oex - static_cast<float>(iWidth),
+          iY + oey, iPassOnFlags | (oElement.flags ^ thdf_flip_horizontal),
+          effect_ticks, render_effect, scale_factor);
     } else {
       oElement.element_sprite_sheet->draw_sprite(
-          pCanvas, oElement.sprite, iX + oElement.x, iY + oElement.y,
-          iPassOnFlags | oElement.flags, effect_ticks, render_effect);
+          pCanvas, oElement.sprite, iX + oex, iY + oey,
+          iPassOnFlags | oElement.flags, effect_ticks, render_effect,
+          scale_factor);
     }
   }
 }
@@ -1063,9 +1069,7 @@ void chunk_renderer::chunk_copy(int npixels, const uint8_t* in_data) {
 }
 
 void chunk_renderer::fix_n_pixels(int& npixels) const {
-  if (ptr + npixels > end) {
-    npixels = static_cast<int>(end - ptr);
-  }
+  npixels = std::min(npixels, static_cast<int>(end - ptr));
 }
 
 void chunk_renderer::increment_position(int npixels) {
@@ -1190,8 +1194,8 @@ animation::animation() { patient_effect_offset = rand(); }
 void animation::draw(render_target* canvas, const xy_pair& draw_pos) {
   if (are_flags_set(flags, thdf_alpha_50 | thdf_alpha_75)) return;
 
-  int x = draw_pos.x + pixel_offset.x;
-  int y = draw_pos.y + pixel_offset.y;
+  int x = draw_pos.x + pixel_offset.x * scale_factor;
+  int y = draw_pos.y + pixel_offset.y * scale_factor;
   if (sound_to_play) {
     sound_player* pSounds = sound_player::get_singleton();
     if (pSounds) pSounds->play_at(sound_to_play, x, y, 0);
@@ -1201,15 +1205,15 @@ void animation::draw(render_target* canvas, const xy_pair& draw_pos) {
     if (flags & thdf_crop) {
       clip_rect rcNew;
       rcNew.y = 0;
-      rcNew.h = canvas->get_height();
-      rcNew.x = x + (crop_column - 1) * 32;
-      rcNew.w = 64;
+      rcNew.h = canvas->get_scaled_height();
+      rcNew.x = x + (crop_column - 1) * 32 * scale_factor;
+      rcNew.w = 64 * scale_factor;
       render_target::scoped_clip clip(canvas, &rcNew);
       manager->draw_frame(canvas, frame_index, layers, x, y, flags,
-                          patient_effect, patient_effect_offset);
+                          patient_effect, patient_effect_offset, scale_factor);
     } else
       manager->draw_frame(canvas, frame_index, layers, x, y, flags,
-                          patient_effect, patient_effect_offset);
+                          patient_effect, patient_effect_offset, scale_factor);
   }
 }
 
@@ -1223,14 +1227,16 @@ void animation::draw_child(render_target* canvas, const xy_pair& draw_pos,
   else
     parent->get_secondary_marker(&x, &y);
 
-  x += pixel_offset.x + draw_pos.x;
-  y += pixel_offset.y + draw_pos.y;
+  x += pixel_offset.x * scale_factor + draw_pos.x;
+  y += pixel_offset.y * scale_factor + draw_pos.y;
   if (sound_to_play) {
     sound_player* pSounds = sound_player::get_singleton();
     if (pSounds) pSounds->play_at(sound_to_play, x, y, 0);
     sound_to_play = 0;
   }
-  if (manager) manager->draw_frame(canvas, frame_index, layers, x, y, flags);
+  if (manager)
+    manager->draw_frame(canvas, frame_index, layers, x, y, flags,
+                        animation_effect::none, 0, scale_factor);
 }
 
 bool animation::hit_test_child(const xy_pair& draw_pos,
@@ -1244,8 +1250,8 @@ void animation::draw_morph(render_target* canvas, const xy_pair& draw_pos) {
 
   if (!manager) return;
 
-  int x = draw_pos.x + pixel_offset.x;
-  int y = draw_pos.y + pixel_offset.y;
+  int x = draw_pos.x + pixel_offset.x * scale_factor;
+  int y = draw_pos.y + pixel_offset.y * scale_factor;
   if (sound_to_play) {
     sound_player* pSounds = sound_player::get_singleton();
     if (pSounds) pSounds->play_at(sound_to_play, x, y, 0);
@@ -1256,19 +1262,23 @@ void animation::draw_morph(render_target* canvas, const xy_pair& draw_pos) {
   // We set the morph rect x and w clip to the entire canvas, so that only
   // vertical clipping is applied.
   oMorphRect.x = 0;
-  oMorphRect.w = canvas->get_width();
-  oMorphRect.y = y + morph_target->pixel_offset.x;
-  oMorphRect.h = morph_target->pixel_offset.y - morph_target->pixel_offset.x;
+  oMorphRect.w = canvas->get_scaled_width();
+  oMorphRect.y = y + morph_target->pixel_offset.x * scale_factor;
+  oMorphRect.h = (morph_target->pixel_offset.y - morph_target->pixel_offset.x) *
+                 scale_factor;
   {
     render_target::scoped_clip clip(canvas, &oMorphRect);
-    manager->draw_frame(canvas, frame_index, layers, x, y, flags);
+    manager->draw_frame(canvas, frame_index, layers, x, y, flags,
+                        animation_effect::none, 0, scale_factor);
   }
-  oMorphRect.y = y + morph_target->pixel_offset.y;
-  oMorphRect.h = morph_target->speed.x - morph_target->pixel_offset.y;
+  oMorphRect.y = y + morph_target->pixel_offset.y * scale_factor;
+  oMorphRect.h =
+      (morph_target->speed.x - morph_target->pixel_offset.y) * scale_factor;
   {
     render_target::scoped_clip clip(canvas, &oMorphRect);
     manager->draw_frame(canvas, morph_target->frame_index, morph_target->layers,
-                        x, y, morph_target->flags);
+                        x, y, morph_target->flags, animation_effect::none, 0,
+                        scale_factor);
   }
 }
 
@@ -1542,7 +1552,16 @@ const sound_replacement_map frame_sound_replacements{
     {11147, sound_pair(35)},
     {11152, sound_pair(35)},
     {11153, sound_pair(35)},
-    {11154, sound_pair(35)}};
+    {11154, sound_pair(35)},
+
+    // Nurse desk typing (anim 3258, east and south orientations)
+    {7153, sound_pair(9)},
+    {7155, sound_pair(9)},
+    {7158, sound_pair(9)},
+    {7159, sound_pair(9)},
+    {7162, sound_pair(9)},
+    {7163, sound_pair(9)},
+    {7166, sound_pair(9)}};
 }  // Namespace
 
 void animation::tick() {
@@ -1722,30 +1741,32 @@ void sprite_render_list::draw(render_target* canvas, const xy_pair& draw_pos) {
     return;
   }
 
-  int x = draw_pos.x + pixel_offset.x;
-  int y = draw_pos.y + pixel_offset.y;
+  int x = draw_pos.x + pixel_offset.x * scale_factor;
+  int y = draw_pos.y + pixel_offset.y * scale_factor;
 
   std::unique_ptr<render_target::scoped_buffer> intermediate_buffer;
   if (use_intermediate_buffer) {
     int minX = INT_MAX, minY = INT_MAX, maxX = INT_MIN, maxY = INT_MIN;
     for (const sprite& pSprite : sprites) {
-      int spriteX = x + pSprite.x;
-      int spriteY = y + pSprite.y;
+      int spriteX = x + pSprite.x * scale_factor;
+      int spriteY = y + pSprite.y * scale_factor;
       int spriteWidth, spriteHeight;
       sheet->get_sprite_size_unchecked(pSprite.index, &spriteWidth,
                                        &spriteHeight);
       minX = std::min(minX, spriteX);
       minY = std::min(minY, spriteY);
-      maxX = std::max(maxX, spriteX + spriteWidth);
-      maxY = std::max(maxY, spriteY + spriteHeight);
+      maxX = std::max(maxX, spriteX + spriteWidth * scale_factor);
+      maxY = std::max(maxY, spriteY + spriteHeight * scale_factor);
     }
     intermediate_buffer = canvas->begin_intermediate_drawing(
         minX, minY, maxX - minX, maxY - minY);
   }
 
   for (const sprite& pSprite : sprites) {
-    sheet->draw_sprite(canvas, pSprite.index, x + pSprite.x, y + pSprite.y,
-                       flags);
+    sheet->draw_sprite(canvas, pSprite.index,
+                       static_cast<float>(x + pSprite.x * scale_factor),
+                       static_cast<float>(y + pSprite.y * scale_factor), flags,
+                       0, animation_effect::none, scale_factor);
   }
 }
 

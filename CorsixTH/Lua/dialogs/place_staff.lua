@@ -45,7 +45,7 @@ function UIPlaceStaff:UIPlaceStaff(ui, profile, x, y)
   self.anim:setLayer(5, profile.layer5)
   local idle_anim = Humanoid.getIdleAnimation(profile.humanoid_class)
   self.anim:setAnimation(self.world.anims, idle_anim)
-  local _, ghost = ui.app.gfx:loadPalette()
+  local _, ghost = ui.app.gfx:getPalette("MPalette.dat")
   local grey_scale = self.world.anims.Alt32_GreyScale
   self.world.anims:setAnimationGhostPalette(idle_anim, ghost, grey_scale)
   self:onCursorWorldPositionChange(x, y)
@@ -57,6 +57,7 @@ function UIPlaceStaff:close()
   local play_placement_sound = true
   if employed_staff then
     employed_staff.pickup = false
+    employed_staff.staffroom_needed = nil
     employed_staff.going_to_staffroom = nil
     employed_staff:getCurrentAction().window = nil
     local room = self.world:getRoom(employed_staff.tile_x, employed_staff.tile_y)
@@ -101,14 +102,23 @@ function UIPlaceStaff:_isValidStaffPlacement()
   end
   local room = world:getRoom(x, y)
   -- On a tile humanoids can walk on?
-  local walkable = flag_cache.passable and (not room and true or not room.crashed)
+  local walkable = flag_cache.passable
+  if room then
+    if room.door and room.door.tile_x and room.door.tile_y then
+      -- Check that the door is accessible from this tile. Otherwise, forbid placement.
+      local reachable = world.pathfinder:findDistance(x, y, room.door.tile_x, room.door.tile_y)
+      walkable = walkable and not room.crashed and reachable
+    else
+      walkable = false
+    end
+  end
   -- and in an area the regular staff (doctors, nurses and handymen) can go?
   local staffable = (self.allow_in_rooms or flag_cache.roomId == 0)
   -- Or is it a receptionist placed on an unstaffed reception desk?
   local reception = false
   if self.profile:isType("Receptionist") then
-    local desk = world:getObject(x, y, "reception_desk") or
-        world:findObjectNear(self, "reception_desk", 0)
+    local desk = world:getObject(x, y, "reception_desk", true) or
+        world:findObjectNear(self, "reception_desk", 0, true)
     reception = desk and not desk.receptionist
   end
   return (walkable and staffable) or reception
@@ -118,7 +128,7 @@ function UIPlaceStaff:draw(canvas)
   if self.world.user_actions_allowed then
     local valid = self:_isValidStaffPlacement()
     self.anim:setFlag(valid and 0 or flag_altpal)
-    local zoom = self.ui.zoom_factor
+    local zoom = self.ui:getEffectiveZoom()
     if canvas:scale(zoom) then
       local x, y = self.ui:WorldToScreen(self.tile_x, self.tile_y)
       self.anim:draw(canvas, math.floor(x / zoom), math.floor(y / zoom))

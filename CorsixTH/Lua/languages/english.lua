@@ -18,8 +18,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
 
+Font("cp437")
 Language("English", "English", "en", "eng")
 Inherit("original_strings", 0)
+IsArabicNumerals(true)
 
 --Note: All strings should use a single space after full-stops. Only exception is level descriptions.
 -------------------------------  OVERRIDE  ----------------------------------
@@ -206,6 +208,7 @@ menu_charts = {
   graphs        = "  (%1%) GRAPHS  ",
   policy        = "  (%1%) POLICY  ",
   machine_menu  = "  (%1%) MACHINES MENU",
+  adviser_history = "  (%1%) ADVISER HISTORY ",
 }
 
 menu_debug = {
@@ -225,6 +228,11 @@ menu_debug = {
   dump_gamelog                = "  (%1%) DUMP GAME LOG  ",
   map_overlay                 = "  MAP OVERLAY  ",
   sprite_viewer               = "  SPRITE VIEWER  ",
+}
+menu_debug_overlay_blocking_off_areas = {
+  choice_1 = "  TOTALLY FORBIDDEN  ",
+  choice_2 = "  PARTIALLY ALLOWED  ",
+  choice_3 = "  COMPLETELY ALLOWED  ",
 }
 menu_debug_overlay = {
   none                        = "  NONE  ",
@@ -293,6 +301,10 @@ adviser = {
     roujin_off_cheat = "Roujin's challenge deactivated. Everything will be back to normal soon.",
     norest_on_cheat = "Oh no! It appears your staff have consumed too much caffeine and no longer feel a need to rest.",
     norest_off_cheat = "Phew! Looks like that buzz finally wore off. Your staff will now rest properly.",
+    queuejump_on_cheat = "Your patients know how to queue. They let nearly dead patients go to the front of the line.",
+    queuejump_off_cheat = "People have turned selfish and are no longer letting nearly dead patients jump the queues.",
+    superdoctor_on_cheat = "A superb medical school has recommended you to their graduates! Check the staff for hire.",
+    superdoctor_off_cheat = "The medical school chief no longer recommends you to their graduates.",
   },
   staff_place_advice = {
     not_enough_lecture_chairs = "Each student doctor needs a lecture chair to sit in!",
@@ -472,13 +484,16 @@ options_window = {
   option_enabled = "Enabled",
   option_disabled = "Disabled",
   fullscreen = "Fullscreen",
-  resolution = "Resolution",
+  window_size = "Window Size",
+  original_aspect_ratio = "Original Aspect (4:3)",
   scale_ui = "UI Scale",
+  scale_auto = "Auto",
+  cursor_scale = "Cursor Scale",
   capture_mouse = "Capture Mouse",
   right_mouse_scrolling = "Mouse Scrolling",
   right_mouse_scrolling_option_middle = "Middle Button",
   right_mouse_scrolling_option_right = "Right Button",
-  custom_resolution = "Custom...",
+  custom_window_size = "Custom...",
   width = "Width",
   height = "Height",
   customise = "Customise",
@@ -490,24 +505,41 @@ options_window = {
   scrollspeed = "Scroll Speed",
   shift_scrollspeed = "Shift Scroll Speed",
   zoom_speed = "Zoom Speed",
+  autosave_frequency = "Autosave Frequency",
   hotkey = "Hotkeys",
   check_for_updates = "Check for Updates",
   sound = "Sound",
 }
 
+autosave_frequency = {
+    monthly = "Monthly",
+    weekly = "Weekly",
+    daily = "Daily",
+}
+
+tooltip.autosave_frequency = {
+    monthly = "Autosave once per month, on the first day of each month. A total of 12 saves with a depth of 1 year.",
+    weekly = "Autosave once per week on the 1st, 7th, 14th, 21nd, and 28th of each month. A total of 60 saves with a depth of 1 year.",
+    daily = "Autosave once per day at the start of each in-game day. A total of 365 saves with a depth of 1 year. Please note that a typical save can take up to 1 megabyte or even more. This way your autosaves folder can grow to 300-500 MB.",
+}
+
 tooltip.options_window = {
   fullscreen = "Whether the game should run in fullscreen or windowed mode",
   fullscreen_button = "Click to toggle fullscreen mode",
-  resolution = "The resolution the game should run in",
-  select_resolution = "Select a new resolution",
-  scale_ui = "Scale the user interface. Only scale options that fit the display are shown, for more increase the resolution.",
+  window_size = "The window size the game should run in",
+  select_window_size = "Select a new window size",
+  original_aspect_ratio = "Apply black bars if necessary to preserve the original game's 4:3 aspect ratio",
+  window_size_does_not_fit = "The window size does not fit the current display",
+  scale_ui = "Scale the user interface.",
   select_ui_scale = "Select a new user interface scale",
+  cursor_scale = "Scale the cursor.",
+  select_cursor_scale = "Select a new cursor scale",
   capture_mouse = "Click to toggle capturing the cursor while in game",
   right_mouse_scrolling = "Toggle the mouse button that is used to scroll the map",
-  width = "Enter desired screen width",
-  height = "Enter desired screen height",
-  apply = "Apply the entered resolution",
-  cancel = "Return without changing the resolution",
+  width = "Enter desired window width",
+  height = "Enter desired window height",
+  apply = "Apply the entered window size",
+  cancel = "Return without changing the window size",
   customise_button = "More settings you can change to customise your game play experience",
   folder_button = "Folder Options",
   language = "The language texts in the game will appear in",
@@ -518,6 +550,7 @@ tooltip.options_window = {
   scrollspeed = "Set the scroll speed between 1 (slowest) to 10 (fastest). The default is 2.",
   shift_scrollspeed = "Set the speed of scrolling while the shift key is pressed. 1 (slowest) to 10 (fastest). The default is 4.",
   zoom_speed = "Set the camera zoom speed from 10 (slowest) to 1000 (fastest). The default is 80.",
+  autosave_frequency = "Set how often the game will make autosaves.",
   apply_scrollspeed = "Apply the entered scroll speed.",
   cancel_scrollspeed = "Return without changing the scroll speed.",
   apply_shift_scrollspeed = "Apply the entered shift scroll speed.",
@@ -628,7 +661,8 @@ tooltip.folders_window = {
   no_font_specified = "No font location specified yet!",
   not_specified = "No folder location specified yet!",
   default = "Default location",
-  reset_to_default = "Reset the directory to its default location",
+  reset_to_default = "Reset the directory to its default location ( %1% )",
+  clear_directory = "Clear current directory selection",
   back  = "Close this menu and go back to the Settings Menu",
 }
 
@@ -699,6 +733,7 @@ hotkey_window = {
   ingame_panel_charts = "Charts",
   ingame_panel_policy = "Policy",
   ingame_panel_machineMenu = "Machines Menu",
+  ingame_panel_adviserHistory = "Adviser History",
   ingame_panel_map_alt = "Town Map 2",
   ingame_panel_research_alt = "Research 2",
   ingame_panel_casebook_alt = "Casebook 2",
@@ -722,6 +757,7 @@ hotkey_window = {
   ingame_poopLog = "Dump Log",
   ingame_poopStrings = "Dump Strings",
   ingame_patient_gohome = "Send Home",
+  ingame_sellPickedUpItem = "Sell Picked-up Item",
   ingame_storePosition_1 = "1",
   ingame_storePosition_2 = "2",
   ingame_storePosition_3 = "3",
@@ -852,7 +888,7 @@ warnings = {
 confirmation = {
   needs_restart = "Changing this setting requires CorsixTH to restart. Any unsaved progress will be lost. Are you sure you want to do this?",
   abort_edit_room = "You are currently building or editing a room. If all required objects are placed it will be finished, but otherwise it will be deleted. Continue?",
-  maximum_screen_size = "The screen size you have entered is greater than 3000 x 2000. Larger resolutions are possible but will require better hardware in order to maintain a playable frame rate. Are you sure you want to continue?",
+  maximum_screen_size = "The window size you have entered is greater than 3000 x 2000. Larger window sizes are possible but will require better hardware in order to maintain a playable frame rate. Are you sure you want to continue?",
   remove_destroyed_room = "Would you like to remove the room for $%d?",
   replace_machine_extra_info = "The new machine will have %d strength (currently %d).",
   restart_mapeditor = "Are you sure you want to restart the map editor?",
@@ -874,6 +910,7 @@ information = {
     cheat = "Hope you didn't click the Lose Level button by accident!",
     staff_happiness = "Your average staff happiness fell below %d%.",
     patient_happiness = "Your average patient happiness fell below %d%.",
+    months_played = "You didn't meet the level goals within %d months.",
   },
   cheat_not_possible = "You cannot use that cheat on this level.",
 }
@@ -891,7 +928,7 @@ totd_window = {
     "A doctor's skill level greatly influences the quality and speed of his diagnoses. Place a skilled doctor in your GP's office, and you won't need as many additional diagnosis rooms.",
     "Juniors and doctors can improve their skills by learning from a consultant in the training room. If the consultant has a special qualification (surgeon, psychiatrist, or researcher), he will also pass on this knowledge to his pupil(s).",
     "Did you try to enter the European emergency number (112) into the fax machine? Make sure your sound is on!",
-    "You can adjust some settings such as the resolution and language in the options window found both in the main menu and ingame.",
+    "You can adjust some settings such as the window size and language in the options window found both in the main menu and ingame.",
     "You selected a language other than English, but there's English text all over the place? Help us by translating missing texts into your language!",
     "The CorsixTH team is looking for reinforcements! Are you interested in coding, translating or creating graphics for CorsixTH? Contact us at our Discord Server, Sub-Reddit or Matrix Server. Links are on our website (CorsixTH.com).",
     "If you find a bug, please report it at our bugtracker: th-issues.corsix.org",
@@ -1007,11 +1044,10 @@ tooltip.calls_dispatcher = {
 }
 
 machine_menu = {
-  percentage = "%d%",
   machine = "Machine",
+  status = "Status",
   remaining_strength = "Remain",
   total_strength = "Strength",
-  ratio = "Ratio",
   close = "Close",
 }
 
@@ -1022,16 +1058,30 @@ tooltip.machine_menu = {
   assigned = "This box is marked if a handyman is assigned to fix corresponding machine. Click to show assigned handyman.",
   remaining_strength = "This value shows remaining strength of the machine",
   total_strength = "This value shows total strength of the machine",
-  ratio = "This value shows ratio of remaining strength and total strength",
   header = {
     smoking = "Danger Indicator",
     assigned = "Repair assignment Indicator",
     machine = "Machine name",
     remaining_strength = "Remaining Strength of the machines.",
+    status = "Status of the machines.",
     total_strength = "Total Strength of the machines.",
-    ratio = "Remaining Strength to Total Strength percentage ratio of the machines.",
   },
   close = "Close the machine list dialog",
+}
+
+adviser_history = {
+  message = "Message",
+  close = "Close",
+}
+
+tooltip.adviser_history = {
+  delete_message = "Click to dismiss this message",
+  message = "List of adviser messages - Newest messages appear first",
+  header = {
+    message = "Adviser messages",
+    delete_message = "Click to delete all messages"
+  },
+  close = "Close the adviser history dialog",
 }
 
 
@@ -1091,10 +1141,14 @@ tooltip.status = {
   over = {
     staff_happiness = "Your average staff happiness should be over %d%. Currently it's %d%",
     patient_happiness = "Your average patient happiness should be over %d%. Currently it's %d%",
+    months_played = "You need to reach the end of %s %d. Currently it's %s %d",
+    years_played = "You need to reach the year %d. Currently it's the year %d",
   },
   under = {
     staff_happiness = "Your average staff happiness should not be less than %d%. Currently it's %d%",
     patient_happiness = "Your average patient happiness should not be less than %d%. Currently it's %d%",
+    months_played = "You need to win by the end of %s %d. Currently it's %s %d",
+    years_played = "You need to reach the year %d. Currently it's the year %d",
   }
 }
 
@@ -1251,10 +1305,17 @@ subtitles = {
 --------------------------------  UNUSED  -----------------------------------
 ------------------- (kept for backwards compatibility) ----------------------
 
-options_window.change_resolution = "Change resolution"
-tooltip.options_window.change_resolution = "Change the window resolution to the dimensions entered on the left"
 information.very_old_save = "There have been a lot of updates to the game since you started this level. To be sure that all features work as intended please consider restarting it."
-
+machine_menu = {
+  ratio = "Ratio",
+  percentage = "%d%",
+}
+tooltip.machine_menu = {
+  ratio = "This value shows ratio of remaining strength and total strength",
+  header = {
+    ratio = "Remaining Strength to Total Strength percentage ratio of the machines.",
+  }
+}
 cheats_window.cheats = {
  toggle_infected = show_infected,
 }

@@ -72,13 +72,12 @@ function World:World(app, free_build_mode)
   self.tick_timer = 0
   self.game_date = Date() -- Current date in the game.
 
+  -- Player pause intent. Only user-facing speed controls should change this.
+  self.user_paused = false
+
   self.room_information_dialogs = app.config.room_information_dialogs
   -- This is false when the game is paused.
   self.user_actions_allowed = true
-
-  -- The system pause method is used as an additional layer to pause the game, where the user
-  -- needs to deal with a recoverable error
-  self.system_pause = false
 
   -- If set, do not create salary raise requests.
   self.debug_disable_salary_raise = self.free_build_mode
@@ -171,11 +170,11 @@ function World:setUI(ui)
   self.ui = ui
 
   self.ui:addKeyHandler("ingame_pause", self, self.pauseOrUnpause, "Pause")
-  self.ui:addKeyHandler("ingame_gamespeed_slowest", self, self.setSpeed, "Slowest")
-  self.ui:addKeyHandler("ingame_gamespeed_slower", self, self.setSpeed, "Slower")
-  self.ui:addKeyHandler("ingame_gamespeed_normal", self, self.setSpeed, "Normal")
-  self.ui:addKeyHandler("ingame_gamespeed_max", self, self.setSpeed, "Max speed")
-  self.ui:addKeyHandler("ingame_gamespeed_thensome", self, self.setSpeed, "And then some more")
+  self.ui:addKeyHandler("ingame_gamespeed_slowest", self, self.setUserSpeed, "Slowest")
+  self.ui:addKeyHandler("ingame_gamespeed_slower", self, self.setUserSpeed, "Slower")
+  self.ui:addKeyHandler("ingame_gamespeed_normal", self, self.setUserSpeed, "Normal")
+  self.ui:addKeyHandler("ingame_gamespeed_max", self, self.setUserSpeed, "Max speed")
+  self.ui:addKeyHandler("ingame_gamespeed_thensome", self, self.setUserSpeed, "And then some more")
 
   self.ui:addKeyHandler("ingame_zoom_in", self, self.adjustZoom,  1)
   self.ui:addKeyHandler("ingame_zoom_in_more", self, self.adjustZoom, 5)
@@ -184,8 +183,10 @@ function World:setUI(ui)
   self.ui:addKeyHandler("ingame_reset_zoom", self, self.resetZoom)
 end
 
+--! Adjust the current zoom level by a delta
+-- TODO: This should live in game_ui not world
 function World:adjustZoom(delta)
-  local scr_w = self.ui.app.config.width
+  local scr_w = TheApp.video:getRenderSize()
   local factor = self.ui.app.config.zoom_speed
   local virtual_width = scr_w / (self.ui.zoom_factor or 1)
 
@@ -197,15 +198,15 @@ function World:adjustZoom(delta)
   end
 
   virtual_width = virtual_width - delta * factor * modifier
-  if virtual_width < 200 then
+  if virtual_width < 200 * TheApp.gfx:getWindowDisplayScale() then
     return false
   end
 
-  return self.ui:setZoom(scr_w / virtual_width)
+  return self.ui:setZoom(scr_w / virtual_width, true)
 end
 
 function World:resetZoom()
-  return self.ui:setZoom(1)
+  return self.ui:setZoom(1, false)
 end
 
 --! Initialize the game level (available diseases, winning conditions).
@@ -443,7 +444,7 @@ function World:spawnPatient(hospital, disease)
   -- Still need to count them even though you haven't got a staffed desk
   -- and you also don't want to spawn them on the map
   hospital.population = hospital.population + 1
-  if not hospital:hasStaffedDesk() then
+  if not hospital:hasReceptionDesk(true) then
     return
   end
 
@@ -451,7 +452,7 @@ function World:spawnPatient(hospital, disease)
   local spawns = self.spawn_points
   -- Let the first patient to the player use the shortest path to a reception desk
   local spawn_point = hospital:isPlayerHospital() and not hospital:hadPatients() and
-      self:_findClosestSpawnToDesk(hospital:getStaffedDesks(), spawns) or
+      self:_findClosestSpawnToDesk(hospital:getReceptionDesks(true), spawns) or
       spawns[math.random(1, #spawns)]
 
   local patient = self:newEntity("Patient", 2, 1)
@@ -744,29 +745,39 @@ function World:getCurrentSpeed()
   end
 end
 
+--! Set game speed from a user-facing control.
+--!param new_speed (string) New speed to set.
+function World:setUserSpeed(new_speed)
+  if self:isMustPauseActive() then return end
+  -- If player paused, remember it
+  self:setUserPaused(new_speed == "Pause")
+  return self:setSpeed(new_speed)
+end
+
 -- Set the (approximate) number of seconds per tick.
---!param speed (string) One of: "Pause", "Slowest", "Slower", "Normal",
+--!param new_speed (string) New speed to set.
+-- One of: "Pause", "Slowest", "Slower", "Normal",
 -- "Max speed", or "And then some more".
-function World:setSpeed(speed)
-  if self:isCurrentSpeed(speed) then
-    return
-  end
-  if speed == "Pause" or self.system_pause then
+function World:setSpeed(new_speed)
+  if self:isCurrentSpeed(new_speed) then return end
+  if self:isMustPauseActive() and new_speed ~= "Pause" then return end -- "Must pause" takes precedence
+  if new_speed == "Speed Up" and self:isPaused() then return end
+  tracy.Message("Changing speed to " .. new_speed)
+
+  if new_speed == "Pause" then
     self.ui.hospital:tickEarthquake("pause")
-    -- By default actions are not allowed when the game is paused.
-    self.user_actions_allowed = TheApp.config.allow_user_actions_while_paused
-  elseif self:getCurrentSpeed() == "Pause" then
-    self.user_actions_allowed = true
   end
 
   local old_speed = self:getCurrentSpeed()
+  -- Remember the last normal gameplay speed. Pause and Speed Up are
+  -- transient states and should not replace the speed we return to.
   if old_speed ~= "Pause" and old_speed ~= "Speed Up" then
     self.prev_speed = old_speed
   end
 
   local was_paused = old_speed == "Pause"
   local old_tick_rate = self.tick_rate or 1
-  local new_hours_per_tick, new_tick_rate = unpack(tick_rates[speed])
+  local new_hours_per_tick, new_tick_rate = unpack(tick_rates[new_speed])
 
   if was_paused then
     TheApp.audio:onEndPause()
@@ -778,41 +789,90 @@ function World:setSpeed(speed)
   self.hours_per_tick = new_hours_per_tick
   self.tick_rate = new_tick_rate
 
-  -- Set the blue filter according to whether the user can build or not.
-  TheApp.video:setBlueFilterActive(not self.user_actions_allowed and not self.ui:checkForMustPauseWindows())
+  self:updateUserInteractionState()
+
   return false
 end
 
+--! Refresh whether the user can interact with the game and presence of the
+-- blue filter
+function World:updateUserInteractionState()
+  self:updateUserActionsAllowed()
+  self:updateScreenBlueFilter()
+end
+
+--! Called when a must pause window comes into existence and pauses the game
+function World:mustPauseWindowAdd()
+  self:setSpeed("Pause")
+  self:updateUserInteractionState()
+end
+
+--! Called when a must pause window is closed and will attempt to unpause
+--! the game
+function World:mustPauseWindowRemoved()
+  if self:isMustPauseActive() then
+    return
+  end
+
+  if self:isCurrentSpeed("Pause") and not self:isGameUserPaused() then
+    self:setSpeed(self.prev_speed)
+  end
+
+  self:updateUserInteractionState()
+end
+
+--! Check if "Must Pause" mode enabled
+--!return (bool) returns true if "Must Pause" mode enabled
+function World:isMustPauseActive()
+  return self.ui:anyMustPauseWindowOpen()
+end
+
+--! Check if game is currently paused
+--!return (boolean) True if paused
 function World:isPaused()
   return self:isCurrentSpeed("Pause")
 end
 
+--! Update state of if game has been paused by user
+--!param state (boolean)
+function World:setUserPaused(state)
+  self.user_paused = state
+end
+
+--! Check whether user pause state applies
+--!return true is we are in a user pause
+function World:isGameUserPaused()
+  return self.user_paused
+end
+
+--! Set the "actions allowed" flag according to whether the user can do some actions with UI or not.
+function World:updateUserActionsAllowed()
+  -- Actions are not allowed when the game in "Must Pause" mode.
+  self.user_actions_allowed = not self:isMustPauseActive() and
+    (not self:isCurrentSpeed("Pause") or TheApp.config.allow_user_actions_while_paused)
+end
+
+--! Set the blue filter according to whether the user can build or not.
+function World:updateScreenBlueFilter()
+  TheApp.video:setBlueFilterActive(not self.user_actions_allowed and not self:isMustPauseActive())
+end
+
 --! Dedicated function to allow unpausing by pressing 'p' again
 function World:pauseOrUnpause()
-  if self:isSystemPauseActive() then return end -- System pause takes precedence
+  if self:isMustPauseActive() then return end -- "Must Pause" takes precedence
   if not self:isCurrentSpeed("Pause") then
+    self:setUserPaused(true)
     self:setSpeed("Pause")
   elseif self.prev_speed then
+    self:setUserPaused(false)
     self:setSpeed(self.prev_speed)
   end
-end
-
---! Sets the system_pause parameter
---!param state (bool)
-function World:setSystemPause(state)
-  self.system_pause = state
-end
-
---! Reports the system pause status
---!return (bool) true is system pause is active, else false
-function World:isSystemPauseActive()
-  return self.system_pause
 end
 
 --! Function to check if player can perform actions when paused
 --!return (bool) Returns true if player hasn't allowed editing while paused
 function World:isUserActionProhibited()
-  if self:isSystemPauseActive() then return true end
+  if self:isMustPauseActive() then return true end
   return self:isCurrentSpeed("Pause") and not self.user_actions_allowed
 end
 
@@ -842,19 +902,8 @@ function World:onTick()
 
   if self.tick_timer == 0 then
     if self.autosave_next_tick then
-      self.autosave_next_tick = nil
-      local pathsep = package.config:sub(1, 1)
-      local dir = TheApp.savegame_dir
-      if dir:sub(-1, -1) ~= pathsep then
-        dir = dir .. pathsep
-      end
-      if not lfs.attributes(dir .. "Autosaves", "modification") then
-        lfs.mkdir(dir .. "Autosaves")
-      end
-      local status, err = pcall(TheApp.save, TheApp, dir .. "Autosaves" .. pathsep .. "Autosave" .. self.game_date:monthOfYear() .. ".sav")
-      if not status then
-        print("Error while autosaving game: " .. err)
-      end
+      self:_executeAutosave()
+      self.autosave_next_tick = false
     end
     if self.game_date == start_date then
       if not self.ui.start_tutorial then
@@ -938,6 +987,26 @@ function World:onTick()
   self.tick_timer = self.tick_timer - 1
 end
 
+--! Creates a save file in the "Autosaves" folder, using the "Autosave-mm-dd.sav" name template for filename.
+-- If the "Autosaves" folder does not exist, folder will be created.
+function World:_executeAutosave()
+  local pathsep = package.config:sub(1, 1)
+  local dir = TheApp.savegame_dir
+  if dir:sub(-1, -1) ~= pathsep then
+    dir = dir .. pathsep
+  end
+  if not lfs.attributes(dir .. "Autosaves", "modification") then
+    lfs.mkdir(dir .. "Autosaves")
+  end
+  local month = string.format("%02d", self.game_date:monthOfYear())
+  local day = string.format("%02d", self.game_date:dayOfMonth())
+  local filename = "Autosave" .. "-" .. month .. "-" .. day .. ".sav"
+  local status, err = pcall(TheApp.save, TheApp, dir .. "Autosaves" .. pathsep .. filename)
+  if not status then
+    print("Error while autosaving game: " .. err)
+  end
+end
+
 --! Change the date of the game to the last hour of this month.
 function World:setEndMonth()
   local previous_date = self.game_date
@@ -985,7 +1054,7 @@ function World:onEndDay()
 
   --check if it's time for a VIP visit
   if self.game_date:isSameDay(self.next_vip_date) then
-    if #self.rooms > 0 and local_hospital:hasStaffedDesk() then
+    if #self.rooms > 0 and local_hospital:hasReceptionDesk(true) then
       local_hospital:createVip()
     else
       self.next_vip_date = self:_generateNextVipDate()
@@ -1045,6 +1114,22 @@ function World:onEndDay()
       self.spawn_hours[hour] = self.spawn_hours[hour] and self.spawn_hours[hour] + 1 or 1
     end
   end
+
+  -- Autosave
+  if self.app.config.autosave_frequency == 3 then
+    -- Daily autosave
+    self.autosave_next_tick = true
+  elseif self.app.config.autosave_frequency == 2 then
+    if day == self.game_date:lastDayOfMonth() or day == 6 or day == 13 or day == 20 or day == 27 then
+      -- Weekly autosave
+      self.autosave_next_tick = true
+    end
+  elseif self.app.config.autosave_frequency == 1 then
+    if day == self.game_date:lastDayOfMonth() then
+      -- Monthly autosave
+      self.autosave_next_tick = true
+    end
+  end
 end
 
 function World:checkIfGameWon()
@@ -1073,7 +1158,6 @@ function World:onEndMonth()
   self:updateSpawnDates()
 
   self:makeAvailableStaff(self.game_date:monthOfGame())
-  self.autosave_next_tick = true
   for _, entity in ipairs(self.entities) do
     if entity.checkForDeadlock then
       self.current_tick_entity = entity
@@ -1301,10 +1385,11 @@ function World:getCampaignWinningText(player_no)
         end
       end
     end
-    local level_info = TheApp:readLevelFile(self.map.level_number)
+    local level_info = TheApp:readLevelFile(self.map.level_filename or self.map.level_number,
+        campaign_info.folder)
     text[1] = _S.letter.dear_player:format(self.hospitals[player_no].name)
     if has_next then
-      if level_info.end_praise then
+      if level_info and level_info.end_praise then
         text[2] = level_info.end_praise:format(next_level_name)
       else
         text[2] = _S.letter.campaign_level_completed:format(next_level_name)
@@ -1414,8 +1499,8 @@ in a room.
 !return (boolean) whether all checks hold.
 --]]
 function World:isTileEmpty(x, y, not_in_room)
-  if #self.entity_map:getHumanoidsAtCoordinate(x, y) ~= 0 or
-      #self.entity_map:getObjectsAtCoordinate(x, y) ~= 0 then
+  if self:atLeastOneHumanoidLocatedAtTile(x, y) or
+    self:atLeastOneObjectLocatedAtTile(x, y) then
     return false
   end
   if not_in_room then
@@ -1424,13 +1509,44 @@ function World:isTileEmpty(x, y, not_in_room)
   return true
 end
 
+--! Checks if any object is located on a tile.
+--!param x (integer) the queried tile's x coordinate.
+--!param y (integer) the queried tile's y coordinate.
+--!return (boolean) true if any object is located on a tile.
+function World:atLeastOneObjectLocatedAtTile(x, y)
+  return #self.entity_map:getObjectsAtCoordinate(x, y) ~= 0
+end
+
+--! Checks if any humanoid is located on a tile.
+--!param x (integer) the queried tile's x coordinate.
+--!param y (integer) the queried tile's y coordinate.
+--!return (boolean) true if any humanoid is located on a tile.
+function World:atLeastOneHumanoidLocatedAtTile(x, y)
+  return #self.entity_map:getHumanoidsAtCoordinate(x, y) ~= 0
+end
+
+--! Сhecks whether a tile is occupied by any humanoid.
+--!param x (integer) the queried tile's x coordinate.
+--!param y (integer) the queried tile's y coordinate.
+--!return (boolean) true if any humanoid is occupy the tile.
+function World:anyHumanoidObscuringArea(x, y)
+  -- Search for humanoids on the given tile and all neighboring tiles, but not diagonal ones
+  local humanoids = self.entity_map:getHumanoidsInSquareAndInAdjacentSquares(x, y)
+  for _, humanoid in ipairs(humanoids) do
+    if humanoid:isObscuringArea(x - 1, x + 1, y - 1, y + 1) then
+      return true
+    end
+  end
+  return false
+end
+
 function World:getFreeBench(x, y, distance)
   local bench, rx, ry, bench_distance
   local object_type = self.object_types.bench
   x, y, distance = math.floor(x), math.floor(y), math.ceil(distance)
   self.pathfinder:findObject(x, y, object_type.thob, distance, function(xpos, ypos, d, dist)
-    local b = self:getObject(xpos, ypos, "bench")
-    if b and not b.user and not b.reserved_for then
+    local b = self:getObject(xpos, ypos, "bench", true)
+    if b and not b.user and not b.reserved_for and not b.picked_up then
       local orientation = object_type.orientations[b.direction]
       if orientation.pathfind_allowed_dirs[d] then
         rx = xpos + orientation.use_position[1]
@@ -1505,10 +1621,11 @@ then call findFreeObjectNearToUse instead.
 !param object_type_name The objects to search for
 !param distance Maximum L1 distance to search from humanoid. If nil then
        everywhere in range will be searched.
+!param only_usable Bool If true the object must be permitted for use
 !param callback Function to call for each result. If it returns true then
        the search will be ended.
 --]]
-function World:findObjectNear(humanoid, object_type_name, distance, callback)
+function World:findObjectNear(humanoid, object_type_name, distance, only_usable, callback)
   if not distance then
     distance = 2^30
   end
@@ -1516,26 +1633,28 @@ function World:findObjectNear(humanoid, object_type_name, distance, callback)
   if not callback then
     -- The default callback returns the first object found
     callback = function(x, y, d)
-      obj = self:getObject(x, y, object_type_name)
-      local orientation = obj.object_type.orientations
-      if orientation then
-        orientation = orientation[obj.direction]
-        if not orientation.pathfind_allowed_dirs[d] then
-          return
+      obj = self:getObject(x, y, object_type_name, only_usable)
+      if obj then
+        local orientation = obj.object_type.orientations
+        if orientation then
+          orientation = orientation[obj.direction]
+          if not orientation.pathfind_allowed_dirs[d] then
+            return
+          end
+          x = x + orientation.use_position[1]
+          y = y + orientation.use_position[2]
         end
-        x = x + orientation.use_position[1]
-        y = y + orientation.use_position[2]
+        ox = x
+        oy = y
+        return true
       end
-      ox = x
-      oy = y
-      return true
     end
   end
   local thob = 0
   if type(object_type_name) == "table" then
     local original_callback = callback
     callback = function(x, y, ...)
-      local cb_obj = self:getObject(x, y, object_type_name)
+      local cb_obj = self:getObject(x, y, object_type_name, only_usable)
       if cb_obj then
         return original_callback(x, y, ...)
       end
@@ -1561,9 +1680,9 @@ function World:findFreeObjectNearToUse(humanoid, object_type_name, which, curren
   -- Other values for which may be added in the future.
   -- Specify current_object if you want to exclude the currently used object from the search
   local object, ox, oy
-  self:findObjectNear(humanoid, object_type_name, nil, function(x, y, d)
+  self:findObjectNear(humanoid, object_type_name, nil, true, function(x, y, d)
     local obj = self:getObject(x, y, object_type_name)
-    if obj.user or (obj.reserved_for and obj.reserved_for ~= humanoid) or (current_object and obj == current_object) then
+    if obj.user or obj.picked_up or (obj.reserved_for and obj.reserved_for ~= humanoid) or (current_object and obj == current_object) then
       return
     end
     local orientation = obj.object_type.orientations
@@ -1674,7 +1793,9 @@ function World:newEntity(class, animation, mood_marker)
   local th = TH.animation()
   th:setAnimation(self.anims, animation)
   local entity = _G[class](th)
-  self.entities[#self.entities + 1] = entity
+  if not table_contains(self.entities, entity) then
+    self.entities[#self.entities + 1] = entity
+  end
   entity.world = self
   entity.mood_marker = mood_marker
   return entity
@@ -1722,6 +1843,9 @@ function World:newObject(id, x, y, flags, name)
   return entity
 end
 
+-- Checks whether object can be spawned at some coordinates.
+-- For example, when searching for a suitable placement for "gates_to_hell".
+-- 'NonSideObject' is a object that do occupy the tile entirely, not only one side of it.
 function World:canNonSideObjectBeSpawnedAt(x, y, objects_id, orientation, spawn_rooms_id, player_id)
   local object = self.object_types[objects_id]
   local objects_footprint = object.orientations[orientation].footprint
@@ -1819,14 +1943,18 @@ function World:isFootprintTileBuildableOrPassable(x, y, tile, footprint, require
   end
 end
 
----
--- Check that pathfinding still works, i.e. that placing the object
--- wouldn't disconnect one part of the hospital from another. To do
--- this, we provisionally mark the footprint as unpassable (as it will
--- become when the object is placed), and then check that the cells
--- surrounding the footprint have not had their connectedness changed.
----
-function World:wouldNonSideObjectBreakPathfindingIfSpawnedAt(x, y, object, objects_orientation, spawn_rooms_id)
+--! Check that pathfinding still works, i.e. that placing the object
+--! wouldn't disconnect one part of the hospital from another. To do
+--! this, we provisionally mark the footprint as unpassable (as it will
+--! become when the object is placed), and then check that the cells
+--! surrounding the footprint have not had their connectedness changed.
+--!param x (integer) target tile x coordinate.
+--!param y (integer) target tile y coordinate.
+--!param object (object) target object for placing.
+--!param objects_orientation (table) object orientations description with footprints.
+--!param room_id (integer) target room for placing the object.
+--!return (bool) will this placement break path finding.
+function World:wouldNonSideObjectBreakPathfindingIfSpawnedAt(x, y, object, objects_orientation, room_id)
   local objects_footprint = object.orientations[objects_orientation].footprint
   local map = self.map.th
 
@@ -1845,7 +1973,7 @@ function World:wouldNonSideObjectBreakPathfindingIfSpawnedAt(x, y, object, objec
     return result
   end
 
-  local all_good = true
+  local pathfinding_success = true
 
   --1. Find out which footprint tiles are passable now before this function makes some unpassable
   --during its test:
@@ -1861,7 +1989,7 @@ function World:wouldNonSideObjectBreakPathfindingIfSpawnedAt(x, y, object, objec
     local xpos = x + tile[1]
     local ypos = y + tile[2]
     local flags = {}
-    if map:getCellFlags(xpos, ypos, flags).roomId == spawn_rooms_id and flags.passable then
+    if map:getCellFlags(xpos, ypos, flags).roomId == room_id and flags.passable then
       if prev_x then
         if not self.pathfinder:findDistance(xpos, ypos, prev_x, prev_y) then
           -- There is no route between the two map nodes. In most cases,
@@ -1873,7 +2001,7 @@ function World:wouldNonSideObjectBreakPathfindingIfSpawnedAt(x, y, object, objec
           -- connected before.
           if not isIsolated(xpos, ypos) then
             if not isIsolated(prev_x, prev_y) then
-              all_good = false
+              pathfinding_success = false
               break
             end
           else
@@ -1892,7 +2020,164 @@ function World:wouldNonSideObjectBreakPathfindingIfSpawnedAt(x, y, object, objec
     map:setCellFlags(x + tile[1], y + tile[2], {passable = tiles_passable_flags[tiles_index]})
   end
 
-  return not all_good
+  return not pathfinding_success
+end
+
+--! Check that pathfinding between object and room door still works,
+--! i.e. that placing the object wouldn't disconnect it from the world.
+--! For that it mark the footprint as unpassable (as it will
+--! become when the object is placed), and then check that the
+--! "use_position" cells have path to the room door.
+--!param object_x (integer) target tile x coordinate.
+--!param object_y (integer) target tile y coordinate.
+--!param room (object) target room for placing the object.
+--!param object_layout (table) object orientation description with footprint.
+--!return (bool) will this placement break path finding.
+function World:wouldNonSideObjectsNotHaveAccessToRoomDoor(object_x, object_y, room, object_layout)
+  if not room.door or not room.door.tile_x or not room.door.tile_y then return true end
+
+  local door_x, door_y = room:getEntranceXY(true)
+  local object_footprint = object_layout.footprint
+  local map = self.map.th
+
+  -- To switch the tiles passability
+  local function setFootprintTilesPassable(passable)
+    for _, tile in ipairs(object_footprint) do
+      if not tile.only_passable then
+        map:setCellFlags(object_x + tile[1], object_y + tile[2], {passable = passable})
+      end
+    end
+  end
+
+  local function _isIsolated(tile_x, tile_y, poi_x, poi_y)
+    -- Make footprint tiles unpassable except only_passable ones
+    setFootprintTilesPassable(false)
+    -- And check is there is a valid path
+    local getPathDistance = self:getPathDistance(tile_x, tile_y, poi_x, poi_y)
+    setFootprintTilesPassable(true)
+
+    -- Let's also check that there is a path even without the footprint apply.
+    -- This will help to avoid cases where the path starts on an inaccessible tile.
+    -- For some reason, "getPathDistance" successfully constructs a path from inaccessible tiles.
+    -- So filtering such cases there.
+    getPathDistance = getPathDistance and self:getPathDistance(tile_x, tile_y, poi_x, poi_y)
+    return not getPathDistance
+  end
+
+  -- 1. Let's simulate it as if we've already placed the object and make some tiles unpassable.
+  -- Find out which footprint tiles are passable now before this function makes some unpassable
+  -- during its test:
+  local tiles_passable_flags = {}
+  for _, tile in ipairs(object_footprint) do
+    table.insert(tiles_passable_flags, map:getCellFlags(object_x + tile[1], object_y + tile[2], {}).passable)
+  end
+
+  -- 2. Find out which use position tiles would become isolated:
+  local pathfinding_success = true
+  local usage_tiles = {}
+  local object_use_positions_names = Object:usePositionNames()
+  for _, usage_position_type in ipairs(object_use_positions_names) do
+    local more_usage_tiles = Object:getXYforUsePosition(object_x, object_y, object_layout, usage_position_type)
+    usage_tiles = table_merge(usage_tiles, more_usage_tiles)
+  end
+
+  for _, usage_tile in ipairs(usage_tiles) do
+    pathfinding_success = pathfinding_success and not _isIsolated(usage_tile[1], usage_tile[2], door_x, door_y)
+    if not pathfinding_success then break end
+  end
+
+  -- 3. For each footprint tile passable flag set to false by step 2 undo this change:
+  for tiles_index, tile in ipairs(object_footprint) do
+    map:setCellFlags(object_x + tile[1], object_y + tile[2], {passable = tiles_passable_flags[tiles_index]})
+  end
+
+  return not pathfinding_success
+end
+
+--! Check that pathfinding between already placed in the room objects
+--! and room door still works. i.e. that placing the target object
+--! wouldn't disconnect the existing objects from the world.
+--! For 'NonSideObject' it mark the footprint as unpassable
+--! (as it will become when the object is placed).
+--! For 'SideObject' this function expects that mark the footprint
+--! as unpassable will be executed outside of this function.
+--! And then this function check that the "use_position" cells
+--! of existing objects have path to the room door.
+--!param object_x (integer) target tile x coordinate.
+--!param object_y (integer) target tile y coordinate.
+--!param room (object) target room for placing the object.
+--!param object_layout (table) object orientation description with footprint.
+--!param is_side_object (bool) is that object is side object.
+--!return (bool) will this placement break path finding.
+function World:wouldObjectBreakRoomObjectsAccessToTheRoomDoor(object_x, object_y, room, object_layout, is_side_object)
+  if not room.door or not room.door.tile_x or not room.door.tile_y then return true end
+
+  local object_footprint
+  local door_x, door_y = room:getEntranceXY(true)
+  local map = self.map.th
+  if not is_side_object then
+    object_footprint = object_layout.footprint
+  end
+
+  -- To switch the tiles passability
+  local function setFootprintTilesPassable(passable) -- not used for SideObjects
+    for _, tile in ipairs(object_footprint) do
+      if not tile.only_passable then
+        map:setCellFlags(object_x + tile[1], object_y + tile[2], {passable = passable})
+      end
+    end
+  end
+
+  local function _isIsolated(tile_x, tile_y, poi_x, poi_y)
+    local getPathDistance = self:getPathDistance(tile_x, tile_y, poi_x, poi_y)
+    return not getPathDistance
+  end
+
+  --1. Find out which footprint tiles are passable now before this function makes some unpassable
+  --during its test:
+  local tiles_passable_flags = {}
+  if not is_side_object then
+    for _, tile in ipairs(object_footprint) do
+      table.insert(tiles_passable_flags, map:getCellFlags(object_x + tile[1], object_y + tile[2], {}).passable)
+    end
+  end
+
+  --2. Make footprint tiles unpassable except only_passable ones
+  if not is_side_object then
+    setFootprintTilesPassable(false)
+  end
+
+  --3. Find out which use position tiles would become isolated:
+  local pathfinding_success = true
+  for room_object, _ in pairs(room.objects) do
+    -- check that for each already placed object there is a valid path to the door
+    local object_usage_tiles = room_object:getAllUsageTiles()
+    for _, usage_tile in pairs(object_usage_tiles) do
+      local use_x, use_y = usage_tile[1], usage_tile[2]
+      -- 'SideObject' somehow has 'use_position', even though they don't have it in the footprint.
+      -- We don't need to check that 'use_position' for 'SideObjects',
+      -- because these 'use_position' are not actually used in the game, so skip them.
+      if (room_object.object_type.class ~= "SideObject") and use_x and use_y then
+        -- check that the placing object itself does not occupy 'use_position'
+        local tile_overlap = (object_x == use_x) and (object_y == use_y)
+        pathfinding_success = pathfinding_success and not tile_overlap
+        -- also check that the placing object does not break the path from 'use_position' to the room door.
+        pathfinding_success = pathfinding_success and not _isIsolated(use_x, use_y, door_x, door_y)
+      end
+      if not pathfinding_success then break end
+    end
+    if not pathfinding_success then break end
+  end
+
+  -- 4. For each footprint tile passable flag set to false by step 2 undo this change:
+  if not is_side_object then
+    setFootprintTilesPassable(true)
+    for tiles_index, tile in ipairs(object_footprint) do
+      map:setCellFlags(object_x + tile[1], object_y + tile[2], {passable = tiles_passable_flags[tiles_index]})
+    end
+  end
+
+  return not pathfinding_success
 end
 
 --! Notifies the world that an object has been placed, notifying
@@ -1907,7 +2192,9 @@ function World:objectPlaced(entity, id)
     id = entity.object_type.id
   end
 
-  self.entities[#self.entities + 1] = entity
+  if not table_contains(self.entities, entity) then
+    self.entities[#self.entities + 1] = entity
+  end
 
   -- Warn a hospital if that is possible.
   if not entity.tile_x or not entity.tile_y then return end
@@ -1969,22 +2256,25 @@ end
 --!param x (int) X position of the object to retrieve.
 --!param y (int) Y position of the object to retrieve.
 --!param id Id to search, nil gets first object, string gets first object with
+--!param only_usable (bool) If true the object must be permitted for use
 --! that id, set of strings gets first object that matches an entry in the set.
 --!return (Object or nil) The found object, or nil if the object is not found.
-function World:getObject(x, y, id)
+function World:getObject(x, y, id, only_usable)
   local objects = self:getObjects(x, y)
   if objects then
     if not id then
-      return objects[1]
+      if not only_usable or not objects[1].picked_up then
+        return objects[1]
+      end
     elseif type(id) == "table" then
       for _, obj in ipairs(objects) do
-        if id[obj.object_type.id] then
+        if id[obj.object_type.id] and (not only_usable or not obj.picked_up) then
           return obj
         end
       end
     else
       for _, obj in ipairs(objects) do
-        if obj.object_type.id == id then
+        if obj.object_type.id == id  and (not only_usable or not obj.picked_up) then
           return obj
         end
       end
@@ -2557,6 +2847,9 @@ function World:afterLoad(old, new)
       end
     end
   end
+  if old < 245 then
+    self.system_pause = nil
+  end
 
   -- Fix the initial of staff names
   self:updateInitialsCache()
@@ -2585,7 +2878,6 @@ function World:afterLoad(old, new)
   end
   self.savegame_version = new
   self.release_version = TheApp:getReleaseString(new)
-  self:setSystemPause(false) -- Reset flag on load
 end
 
 function World:playLoadedEntitySounds()
@@ -2619,7 +2911,7 @@ passable tiles (the norm for most objects)]]
 --!return (boolean) indicating if exclusively passable or not
 function World:isTileExclusivelyPassable(x, y, distance)
   for o in pairs(self:findAllObjectsNear(x, y, distance)) do
-    if o and o.footprint then
+    if o and not o.picked_up and o.footprint then
       for _, footprint in pairs(o.footprint) do
         if footprint[1] + o.tile_x == x and footprint[2] + o.tile_y == y and footprint.only_passable and not footprint.shareable then
           return false
@@ -2628,7 +2920,8 @@ function World:isTileExclusivelyPassable(x, y, distance)
     else
       -- doors don't have a footprint but objects can't be built blocking them either
       for _, footprint in pairs(o:getWalkableTiles()) do
-        if o.object_type and o.object_type.thob ~= 62 and footprint[1] == x and footprint[2] == y then
+        -- 62 is a litter thob
+        if not o.picked_up and o.object_type and o.object_type.thob ~= 62 and footprint[1] == x and footprint[2] == y then
           return false
         end
       end

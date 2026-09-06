@@ -22,6 +22,10 @@ SOFTWARE.
 
 #include "config.h"
 
+#ifdef WITH_TRACY
+#include <tracy/Tracy.hpp>
+#endif
+
 #include <cstring>
 #include <list>
 #include <map>
@@ -63,6 +67,8 @@ int l_map_set_sheet(lua_State* L) {
 }
 
 int l_map_persist(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   luaT_rotate(L, 1, -1);
   pMap->persist((lua_persist_writer*)lua_touserdata(L, 1));
@@ -70,6 +76,8 @@ int l_map_persist(lua_State* L) {
 }
 
 int l_map_depersist(lua_State* L) {
+  ZoneScoped;
+
   void* map_ud = luaT_testuserdata<level_map>(L);
   lua_settop(L, 2);
   lua_insert(L, 1);
@@ -136,10 +144,11 @@ int l_map_save(lua_State* L) {
 animation* l_map_updateblueprint_getnextanim(lua_State* L, int& iIndex) {
   animation* pAnim;
   lua_rawgeti(L, 11, iIndex);
+  const int animation_upvalue = luaT_upvalueindex(2);
   if (lua_type(L, -1) == LUA_TNIL) {
     lua_pop(L, 1);
     pAnim = luaT_new<animation>(L);
-    lua_pushvalue(L, luaT_upvalueindex(2));
+    lua_pushvalue(L, animation_upvalue);
     lua_setmetatable(L, -2);
     lua_createtable(L, 0, 2);
     lua_pushvalue(L, 1);
@@ -147,6 +156,17 @@ animation* l_map_updateblueprint_getnextanim(lua_State* L, int& iIndex) {
     lua_pushvalue(L, 12);
     lua_setfield(L, -2, "animator");
     lua_setfenv(L, -2);
+
+    // Blueprint wall animations are created directly, so add them to the weak
+    // animation lookup used by level_map::persist(); otherwise they save as nil
+    // and disappear after reload.
+    int anim_index = lua_gettop(L);
+    lua_rawgeti(L, animation_upvalue, 2);
+    lua_pushlightuserdata(L, pAnim);
+    lua_pushvalue(L, anim_index);
+    lua_rawset(L, -3);
+    lua_pop(L, 1);
+
     lua_rawseti(L, 11, iIndex);
   } else {
     pAnim = luaT_testuserdata<animation>(L, -1, luaT_upvalueindex(2));
@@ -189,6 +209,8 @@ int l_map_settemperaturedisplay(lua_State* L) {
 }
 
 int l_map_updatetemperature(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   uint16_t iAir = l_check_temp(L, 2);
   uint16_t iRadiator = l_check_temp(L, 3);
@@ -198,6 +220,8 @@ int l_map_updatetemperature(lua_State* L) {
 }
 
 int l_map_gettemperature(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   int iX = static_cast<int>(luaL_checkinteger(L, 2)) - 1;
   int iY = static_cast<int>(luaL_checkinteger(L, 3)) - 1;
@@ -224,6 +248,8 @@ inline bool is_valid(bool entire_invalid, const map_tile* pNode,
 }
 
 int l_map_updateblueprint(lua_State* L) {
+  ZoneScoped;
+
   // NB: This function can be implemented in Lua, but is implemented in C for
   // efficiency.
   const unsigned short iFloorTileGood = 24 + (thdf_alpha_50 << 8);
@@ -308,10 +334,8 @@ int l_map_updateblueprint(lua_State* L) {
   animation* pAnim = l_map_updateblueprint_getnextanim(L, iNextAnim);
   map_tile* pNode = pMap->get_tile_unchecked(iNewX, iNewY);
   pAnim->set_animation(pAnims, iWallAnimTopCorner);
-  pAnim->set_flags(thdf_list_bottom |
-                   (is_valid(entire_invalid, pNode, pMap, player_id)
-                        ? 0
-                        : thdf_alt_palette));
+  pAnim->set_flags(
+      is_valid(entire_invalid, pNode, pMap, player_id) ? 0 : thdf_alt_palette);
   pAnim->attach_to_tile({iNewX, iNewY}, pNode, 0);
 
   for (int iX = iNewX; iX < iNewX + iNewW; ++iX) {
@@ -319,20 +343,18 @@ int l_map_updateblueprint(lua_State* L) {
       pAnim = l_map_updateblueprint_getnextanim(L, iNextAnim);
       pNode = pMap->get_tile_unchecked(iX, iNewY);
       pAnim->set_animation(pAnims, iWallAnim);
-      pAnim->set_flags(thdf_list_bottom |
-                       (is_valid(entire_invalid, pNode, pMap, player_id)
-                            ? 0
-                            : thdf_alt_palette));
+      pAnim->set_flags(is_valid(entire_invalid, pNode, pMap, player_id)
+                           ? 0
+                           : thdf_alt_palette);
       pAnim->attach_to_tile({iX, iNewY}, pNode, 0);
       pAnim->set_pixel_offset(0, 0);
     }
     pAnim = l_map_updateblueprint_getnextanim(L, iNextAnim);
     pNode = pMap->get_tile_unchecked(iX, iNewY + iNewH - 1);
     pAnim->set_animation(pAnims, iWallAnim);
-    pAnim->set_flags(thdf_list_bottom |
-                     (is_valid(entire_invalid, pNode, pMap, player_id)
-                          ? 0
-                          : thdf_alt_palette));
+    pAnim->set_flags(is_valid(entire_invalid, pNode, pMap, player_id)
+                         ? 0
+                         : thdf_alt_palette);
     pNode = pMap->get_tile_unchecked(iX, iNewY + iNewH);
     pAnim->attach_to_tile({iX, iNewY + iNewH}, pNode, 0);
     pAnim->set_pixel_offset(0, -1);
@@ -342,7 +364,7 @@ int l_map_updateblueprint(lua_State* L) {
       pAnim = l_map_updateblueprint_getnextanim(L, iNextAnim);
       pNode = pMap->get_tile_unchecked(iNewX, iY);
       pAnim->set_animation(pAnims, iWallAnim);
-      pAnim->set_flags(thdf_list_bottom | thdf_flip_horizontal |
+      pAnim->set_flags(thdf_flip_horizontal |
                        (is_valid(entire_invalid, pNode, pMap, player_id)
                             ? 0
                             : thdf_alt_palette));
@@ -352,7 +374,7 @@ int l_map_updateblueprint(lua_State* L) {
     pAnim = l_map_updateblueprint_getnextanim(L, iNextAnim);
     pNode = pMap->get_tile_unchecked(iNewX + iNewW - 1, iY);
     pAnim->set_animation(pAnims, iWallAnim);
-    pAnim->set_flags(thdf_list_bottom | thdf_flip_horizontal |
+    pAnim->set_flags(thdf_flip_horizontal |
                      (is_valid(entire_invalid, pNode, pMap, player_id)
                           ? 0
                           : thdf_alt_palette));
@@ -456,6 +478,8 @@ int l_map_set_player_heliport(lua_State* L) {
 }
 
 int l_map_getcell(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   int iX = static_cast<int>(luaL_checkinteger(L, 2) -
                             1);  // Lua arrays start at 1 - pretend
@@ -502,6 +526,7 @@ const std::map<std::string, map_tile_flags::key> lua_tile_flag_map{
     {"buildableEast", map_tile_flags::key::buildable_e_mask},
     {"buildableSouth", map_tile_flags::key::buildable_s_mask},
     {"buildableWest", map_tile_flags::key::buildable_w_mask},
+    {"avoidTile", map_tile_flags::key::avoid_tile_mask},
 };
 
 /**
@@ -531,11 +556,38 @@ void add_cellint(lua_State* L, const int value, const std::string_view name) {
 }
 
 /**
+ * Get the room id at the given position
+ * @param L Lua context.
+ *   [1] - The world map object
+ *   [2] - The X coordinate
+ *   [3] - The Y coordinate
+ * @return Number of results of the call. The roomId is pushed onto L.
+ */
+int l_map_get_room_id(lua_State* L) {
+  ZoneScoped;
+
+  level_map* pMap = luaT_testuserdata<level_map>(L);
+  int iX = static_cast<int>(luaL_checkinteger(L, 2) -
+                            1);  // Lua arrays start at 1 - pretend
+  int iY = static_cast<int>(luaL_checkinteger(L, 3) - 1);  // the map does too.
+
+  map_tile* pNode = pMap->get_tile(iX, iY);
+  if (pNode == nullptr) {
+    return luaL_argerror(L, 2, "Map coordinates out of bounds");
+  }
+
+  lua_pushinteger(L, pNode->iRoomId);
+  return 1;
+}
+
+/**
  * Get the value of all cell flags at a position.
  * @param L Lua context.
  * @return Number of results of the call.
  */
 int l_map_getcellflags(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   int iX = static_cast<int>(luaL_checkinteger(L, 2) -
                             1);  // Lua arrays start at 1 - pretend
@@ -584,6 +636,8 @@ int l_map_getcellraw(lua_State* L) {
   if the object list would not be cleared it would result in duplication
   of thobs in the object list. */
 int l_map_erase_thobs(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   int iX = static_cast<int>(luaL_checkinteger(L, 2) -
                             1);  // Lua arrays start at 1 - pretend
@@ -617,6 +671,8 @@ int l_map_remove_cell_thob(lua_State* L) {
 }
 
 int l_map_setcellflags(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   int iX = static_cast<int>(luaL_checkinteger(L, 2) -
                             1);  // Lua arrays start at 1 - pretend
@@ -666,22 +722,28 @@ int l_map_setwallflags(lua_State* L) {
 
 int l_map_setcell(lua_State* L) {
   level_map* pMap = luaT_testuserdata<level_map>(L);
-  int iX = static_cast<int>(luaL_checkinteger(L, 2) -
-                            1);  // Lua arrays start at 1 - pretend
-  int iY = static_cast<int>(luaL_checkinteger(L, 3) - 1);  // the map does too.
+
+  // Extract the position. Subtract 1 to arrive at 0-based C++ indexing.
+  int iX = static_cast<int>(luaL_checkinteger(L, 2) - 1);
+  int iY = static_cast<int>(luaL_checkinteger(L, 3) - 1);
+
   map_tile* pNode = pMap->get_tile(iX, iY);
   if (pNode == nullptr) {
     return luaL_argerror(L, 2, "Map coordinates out of bounds");
   }
+
   if (lua_gettop(L) >= 7) {
-    pNode->tile_layers[tile_layer::ground] =
-        static_cast<uint16_t>(luaL_checkinteger(L, 4));
-    pNode->tile_layers[tile_layer::north_wall] =
-        static_cast<uint16_t>(luaL_checkinteger(L, 5));
-    pNode->tile_layers[tile_layer::west_wall] =
-        static_cast<uint16_t>(luaL_checkinteger(L, 6));
-    pNode->tile_layers[tile_layer::ui] =
-        static_cast<uint16_t>(luaL_checkinteger(L, 7));
+    uint16_t value = static_cast<uint16_t>(luaL_checkinteger(L, 4));
+    pNode->tile_layers[tile_layer::ground] = value;
+
+    value = static_cast<uint16_t>(luaL_checkinteger(L, 5));
+    pNode->tile_layers[tile_layer::north_wall] = value;
+
+    value = static_cast<uint16_t>(luaL_checkinteger(L, 6));
+    pNode->tile_layers[tile_layer::west_wall] = value;
+
+    value = static_cast<uint16_t>(luaL_checkinteger(L, 7));
+    pNode->tile_layers[tile_layer::ui] = value;
   } else {
     lua_Integer layer = luaL_checkinteger(L, 4) - 1;
     if (layer < tile_layer::ground || layer >= tile_layer::num_tile_layers)
@@ -754,10 +816,11 @@ int l_map_unmark_room(lua_State* L) {
 
   for (int iY = iY_; iY < iY_ + iH; ++iY) {
     for (int iX = iX_; iX < iX_ + iW; ++iX) {
+      const map_tile* orig_tile = pMap->get_original_tile_unchecked(iX, iY);
       map_tile* pNode = pMap->get_tile_unchecked(iX, iY);
+
       pNode->tile_layers[tile_layer::ground] =
-          pMap->get_original_tile_unchecked(iX, iY)
-              ->tile_layers[tile_layer::ground];
+          orig_tile->tile_layers[tile_layer::ground];
       pNode->flags.room = false;
       pNode->iRoomId = 0;
     }
@@ -771,6 +834,8 @@ int l_map_unmark_room(lua_State* L) {
 }
 
 int l_map_draw(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   render_target* pCanvas = luaT_testuserdata<render_target>(L, 2);
 
@@ -786,6 +851,8 @@ int l_map_draw(lua_State* L) {
 }
 
 int l_map_hittest(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   drawable* pObject = pMap->hit_test(static_cast<int>(luaL_checkinteger(L, 2)),
                                      static_cast<int>(luaL_checkinteger(L, 3)));
@@ -799,6 +866,8 @@ int l_map_hittest(lua_State* L) {
 }
 
 int l_map_get_parcel_tilecount(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   int iParcel = static_cast<int>(luaL_checkinteger(L, 2));
   lua_Integer iCount = pMap->get_parcel_tile_count(iParcel);
@@ -807,12 +876,16 @@ int l_map_get_parcel_tilecount(lua_State* L) {
 }
 
 int l_map_get_parcel_count(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   lua_pushinteger(L, pMap->get_parcel_count());
   return 1;
 }
 
 int l_map_set_parcel_owner(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   int parcelId = static_cast<int>(luaL_checkinteger(L, 2));
   int player = static_cast<int>(luaL_checkinteger(L, 3));
@@ -848,17 +921,19 @@ int l_map_get_parcel_owner(lua_State* L) {
 
 int l_map_is_parcel_purchasable(lua_State* L) {
   level_map* pMap = luaT_testuserdata<level_map>(L);
-  lua_pushboolean(
-      L, pMap->is_parcel_purchasable(static_cast<int>(luaL_checkinteger(L, 2)),
-                                     static_cast<int>(luaL_checkinteger(L, 3)))
-             ? 1
-             : 0);
+  int parcel = static_cast<int>(luaL_checkinteger(L, 2));
+  int player = static_cast<int>(luaL_checkinteger(L, 3));
+
+  bool purchasable = pMap->is_parcel_purchasable(parcel, player);
+  lua_pushboolean(L, purchasable ? 1 : 0);
   return 1;
 }
 
 /* Compute the fraction of corridor tiles with litter, of the parcels owned by
  * the given player. */
 int l_map_get_litter_fraction(lua_State* L) {
+  ZoneScoped;
+
   level_map* pMap = luaT_testuserdata<level_map>(L);
   int owner = static_cast<int>(luaL_checkinteger(L, 2));
   if (owner == 0) {
@@ -928,11 +1003,14 @@ int l_path_depersist(lua_State* L) {
 }
 
 int l_path_is_reachable_from_hospital(lua_State* L) {
+  ZoneScoped;
+
   pathfinder* pPathfinder = luaT_testuserdata<pathfinder>(L);
 
-  bool found = pPathfinder->find_path_to_hospital(
-      nullptr, static_cast<int>(luaL_checkinteger(L, 2) - 1),
-      static_cast<int>(luaL_checkinteger(L, 3) - 1));
+  int start_x = static_cast<int>(luaL_checkinteger(L, 2) - 1);
+  int start_y = static_cast<int>(luaL_checkinteger(L, 3) - 1);
+  bool found = pPathfinder->find_path_to_hospital(nullptr, start_x, start_y);
+
   if (found) {
     lua_pushboolean(L, 1);
     int iX, iY;
@@ -947,13 +1025,16 @@ int l_path_is_reachable_from_hospital(lua_State* L) {
 }
 
 int l_path_distance(lua_State* L) {
+  ZoneScoped;
+
   pathfinder* pPathfinder = luaT_testuserdata<pathfinder>(L);
 
-  bool found = pPathfinder->find_path(
-      nullptr, static_cast<int>(luaL_checkinteger(L, 2)) - 1,
-      static_cast<int>(luaL_checkinteger(L, 3)) - 1,
-      static_cast<int>(luaL_checkinteger(L, 4)) - 1,
-      static_cast<int>(luaL_checkinteger(L, 5)) - 1);
+  int start_x = static_cast<int>(luaL_checkinteger(L, 2) - 1);
+  int start_y = static_cast<int>(luaL_checkinteger(L, 3) - 1);
+  int end_x = static_cast<int>(luaL_checkinteger(L, 4) - 1);
+  int end_y = static_cast<int>(luaL_checkinteger(L, 5) - 1);
+  bool found = pPathfinder->find_path(nullptr, start_x, start_y, end_x, end_y);
+
   if (found) {
     lua_pushinteger(L, pPathfinder->get_path_length());
   } else {
@@ -963,26 +1044,36 @@ int l_path_distance(lua_State* L) {
 }
 
 int l_path_path(lua_State* L) {
+  ZoneScoped;
+
   pathfinder* pPathfinder = luaT_testuserdata<pathfinder>(L);
-  pPathfinder->find_path(nullptr, static_cast<int>(luaL_checkinteger(L, 2)) - 1,
-                         static_cast<int>(luaL_checkinteger(L, 3)) - 1,
-                         static_cast<int>(luaL_checkinteger(L, 4)) - 1,
-                         static_cast<int>(luaL_checkinteger(L, 5)) - 1);
+
+  int start_x = static_cast<int>(luaL_checkinteger(L, 2) - 1);
+  int start_y = static_cast<int>(luaL_checkinteger(L, 3) - 1);
+  int end_x = static_cast<int>(luaL_checkinteger(L, 4) - 1);
+  int end_y = static_cast<int>(luaL_checkinteger(L, 5) - 1);
+  pPathfinder->find_path(nullptr, start_x, start_y, end_x, end_y);
   pPathfinder->push_result(L);
   return 2;
 }
 
+// findIdleTile(path_finder, queue_x, queue_y, tile_number, opt_parcel)
+// -> Either nothing is returned or the coordinates of the found tile.
+//
+// The tile_number should be a random number, to get the (random) Nth tile.
+// That gives more variation in returned positions.
 int l_path_idle(lua_State* L) {
+  ZoneScoped;
+
   pathfinder* pPathfinder = luaT_testuserdata<pathfinder>(L);
 
-  bool found = pPathfinder->find_idle_tile(
-      nullptr,                                        // Default map.
-      static_cast<int>(luaL_checkinteger(L, 2)) - 1,  // X coordinate queue.
-      static_cast<int>(luaL_checkinteger(L, 3)) - 1,  // Y coordinate queue.
-      static_cast<int>(
-          luaL_optinteger(L, 4, 0)),  // Take Nth candidate tile, used for
-                                      // queueing and randomizing idling tiles.
-      static_cast<int>(luaL_optinteger(L, 5, 0)));  // Optional indoor parcel.
+  int queue_x = static_cast<int>(luaL_checkinteger(L, 2) - 1);
+  int queue_y = static_cast<int>(luaL_checkinteger(L, 3) - 1);
+  int n = static_cast<int>(luaL_optinteger(L, 4, 0));
+  int opt_parcel = static_cast<int>(luaL_optinteger(L, 5, 0));
+
+  bool found =
+      pPathfinder->find_idle_tile(nullptr, queue_x, queue_y, n, opt_parcel);
   if (!found) {
     return 0;
   }
@@ -994,15 +1085,19 @@ int l_path_idle(lua_State* L) {
 }
 
 int l_path_visit(lua_State* L) {
+  ZoneScoped;
+
   pathfinder* pPathfinder = luaT_testuserdata<pathfinder>(L);
   luaL_checktype(L, 6, LUA_TFUNCTION);
 
-  bool found = pPathfinder->visit_objects(
-      nullptr, static_cast<int>(luaL_checkinteger(L, 2)) - 1,
-      static_cast<int>(luaL_checkinteger(L, 3)) - 1,
-      static_cast<object_type>(luaL_checkinteger(L, 4)),
-      static_cast<int>(luaL_checkinteger(L, 5)), L, 6,
-      luaL_checkinteger(L, 4) == 0 ? true : false);
+  int start_x = static_cast<int>(luaL_checkinteger(L, 2) - 1);
+  int start_y = static_cast<int>(luaL_checkinteger(L, 3) - 1);
+  lua_Integer obj_number = luaL_checkinteger(L, 4);
+  object_type obj_type = static_cast<object_type>(obj_number);
+  int max_distance = static_cast<int>(luaL_checkinteger(L, 5));
+  bool found = pPathfinder->visit_objects(nullptr, start_x, start_y, obj_type,
+                                          max_distance, L, 6,
+                                          obj_number == 0 ? true : false);
 
   lua_pushboolean(L, found);
   return 1;
@@ -1029,6 +1124,7 @@ void lua_register_map(const lua_register_state* pState) {
     lcb.add_function(l_map_set_player_heliport, "setHeliportTile");
     lcb.add_function(l_map_getcell, "getCell");
     lcb.add_function(l_map_gettemperature, "getCellTemperature");
+    lcb.add_function(l_map_get_room_id, "getRoomId");
     lcb.add_function(l_map_getcellflags, "getCellFlags");
     lcb.add_function(l_map_setcellflags, "setCellFlags");
     lcb.add_function(l_map_getcellraw, "getCellRaw");

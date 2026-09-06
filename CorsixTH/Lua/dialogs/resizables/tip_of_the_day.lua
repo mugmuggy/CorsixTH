@@ -34,7 +34,8 @@ function UITipOfTheDay:UITipOfTheDay(ui)
   local app = ui.app
   -- If the application window is not wide enough,
   --  the tips window is narrower and taller to fit beside the main menu
-  local width = math.min(380, math.floor(app.config.width / 2) - 150)
+  local scr_w = app.video:getRenderSize()
+  local width = math.min(380, math.floor(scr_w / 2) - 150)
   local height = width > 290 and 110 or 210
   self:UIResizable(ui, width, height, col_bg)
 
@@ -72,7 +73,7 @@ function UITipOfTheDay:draw(canvas, x, y)
   UIResizable.draw(self, canvas, x, y)
 
   -- Draw tip
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   x, y = self.x * s + x, self.y * s + y
 
   local text = _S.totd_window.tips[self.tip_num]

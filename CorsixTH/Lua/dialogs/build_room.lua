@@ -80,7 +80,7 @@ function UIBuildRoom:UIBuildRoom(ui)
   local build_room_dialog_close = TheApp.gfx:loadSpriteTable("Bitmap", "aux_ui", true)
   self:addPanel(224, 146, 224):makeButton(8, 34, 134, 27, 224, self.close):setTooltip(_S.tooltip.build_room_window.close)
   .panel_for_sprite.custom_draw = --[[persistable:build_room_draw_close_button]] function(panel, canvas, x, y)
-    local s = TheApp.config.ui_scale
+    local s = TheApp.gfx:getUIScale()
     x = x + panel.x * s
     y = y + panel.y * s
     panel.window.panel_sprites:draw(canvas, panel.sprite_index, x, y, { scaleFactor = s })
@@ -129,7 +129,7 @@ local cat_label_y = {21, 53, 84, 116}
 function UIBuildRoom:draw(canvas, x, y)
   Window.draw(self, canvas, x, y)
 
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   x, y = self.x * s + x, self.y * s + y
   self.white_font:draw(canvas, self.list_title, x + 163 * s, y + 18 * s)
   for i = 1, 4 do
@@ -145,9 +145,8 @@ function UIBuildRoom:draw(canvas, x, y)
   self.white_font:draw(canvas, self.cost_box, x + 163 * s, y + 232 * s)
 
   if self.preview_anim then
-    canvas:scale(s)
-    self.preview_anim:draw(canvas, math.floor(x / s) + 70, math.floor(y / s) + 200)
-    canvas:scale(1)
+    self.preview_anim:setScaleFactor(s)
+    self.preview_anim:draw(canvas, x + 70 * s, y + 200 * s)
   end
 end
 
@@ -199,7 +198,7 @@ end
 function UIBuildRoom:onMouseMove(x, y, dx, dy)
   local repaint = Window.onMouseMove(self, x, y, dx, dy)
 
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   local hover_idx = 0
   if 156 * s <= x and x < 287 * s and 31 * s <= y and y < 226 * s then
     for i = 5, 14 do

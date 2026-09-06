@@ -67,7 +67,7 @@ end
 function UIMachine:draw(canvas, x, y)
   Window.draw(self, canvas, x, y)
 
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   x, y = self.x * s + x, self.y * s + y
   local mach = self.machine
 
@@ -98,6 +98,7 @@ function UIMachine:callHandyman()
     else
       self.machine.hospital:modifyHandymanTaskPriority(taskIndex, 2, "repairing")
     end
+    self.machine:setRepairingStatus()
   end
 end
 
@@ -132,7 +133,7 @@ end
 function UIMachine:onMouseDown(code, x, y)
   -- cycle through all machines when you right click on the machine title
   if code == "right" then
-    local s = TheApp.config.ui_scale
+    local s = TheApp.gfx:getUIScale()
     local is_hit_namebox = x > self.tooltip_regions[1].x * s and x < self.tooltip_regions[1].r * s
                        and y > self.tooltip_regions[1].y * s and y < self.tooltip_regions[1].b * s
     if is_hit_namebox then

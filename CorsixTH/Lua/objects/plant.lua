@@ -47,22 +47,18 @@ object.usage_animations = {
 object.orientations = {
   north = {
     footprint = { {0, 0, complete_cell = true} },
-    use_position = {0, -1},
     use_animate_from_use_position = true
   },
   east = {
     footprint = { {0, 0, complete_cell = true} },
-    use_position = {-1, 0},
     use_animate_from_use_position = true
   },
   south = {
     footprint = { {0, 0, complete_cell = true} },
-    use_position = {0, -1},
     use_animate_from_use_position = true
   },
   west = {
     footprint = { {0, 0, complete_cell = true} },
-    use_position = {-1, 0},
     use_animate_from_use_position = true
   },
 }
@@ -310,12 +306,12 @@ function Plant:isDying()
   return false
 end
 
-function Plant:onDestroy()
+function Plant:resetUsageAndReservaton()
   local index = self.hospital:getIndexOfTask(self.tile_x, self.tile_y, "watering")
   if index ~= -1 then
     self.hospital:removeHandymanTask(index, "watering")
   end
-  Object.onDestroy(self)
+  Object.resetUsageAndReservaton(self)
 end
 
 function Plant:afterLoad(old, new)

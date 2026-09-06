@@ -28,7 +28,6 @@ function UIMessage:UIMessage(ui, x, stop_x, onClose, type, message, owner, timeo
   self:Window()
 
   local app = ui.app
-  ui:playSound("NewFax.wav")
 
   self.esc_closes = false
   self.on_top = false
@@ -84,7 +83,8 @@ function UIMessage:draw(canvas, x, y)
   if self.on_top then
     Window.draw(self, canvas, x, y)
   else
-    canvas:pushClip(0, y + self.stop_y, canvas:getWidth(), self.height, true)
+    local width = canvas:getRenderSize()
+    canvas:pushClip(0, y + self.stop_y, width, self.height, true)
     Window.draw(self, canvas, x, y)
     canvas:popClip()
   end
@@ -105,13 +105,10 @@ end
 
 --! Displays the fax/strike message to the player when opened from the bottom_panel.
 function UIMessage:openMessage()
-  if TheApp.world:isUserActionProhibited() and not self.ui:checkForMustPauseWindows() then
+  if TheApp.world:isUserActionProhibited() then
     self.ui:playSound("wrong2.wav")
     self:adjustToggle()
     return
-  end
-  if TheApp.world:isCurrentSpeed("Speed Up") then
-    TheApp.world:previousSpeed()
   end
   if self.type == "strike" then -- strikes are special cases, as they are not faxes
     self.ui:addWindow(UIStaffRise(self.ui, self.owner, self.message))
@@ -147,8 +144,9 @@ function UIMessage:removeMessage(choice_number)
       self.owner.message_callback = nil
     end
     if self.onClose then
-      self:onClose(false)
+      local onClose = self.onClose
       self.onClose = nil
+      onClose(self)
     end
     self:close()
   end
@@ -165,7 +163,6 @@ function UIMessage:dismissMessage()
 end
 
 function UIMessage:setXLimit(stop_x)
-  assert(stop_x <= self.stop_x, "UIMessage moved in wrong direction")
   self.stop_x = stop_x
 end
 

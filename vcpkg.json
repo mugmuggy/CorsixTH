@@ -6,10 +6,11 @@
         "tools"
       ]
     },
-    "sdl2",
+    "sdl3",
     "luafilesystem",
     "lpeg",
     "libpng",
+    "zlib",
     {
        "name": "fluidsynth",
        "features": [
@@ -17,15 +18,15 @@
        ]
     },
     {
-      "name": "sdl2-mixer",
+      "name": "sdl3-mixer",
       "features": [
-        "libmodplug",
-        {
-          "name": "fluidsynth"
-        },
+        "libxmp",
+        "fluidsynth",
         "libflac",
         "mpg123",
-        "opusfile"
+        "opusfile",
+        "libvorbis",
+        "wavpack"
       ]
     },
     "freetype"
@@ -75,6 +76,15 @@
       "dependencies": [
         "catch2"
       ]
+    },
+    "tracy": {
+      "description": "Support Tracy profiling",
+      "dependencies": [{
+        "name": "tracy",
+        "features": [
+          "cli-tools"
+        ]
+      }]
     }
   }
 }

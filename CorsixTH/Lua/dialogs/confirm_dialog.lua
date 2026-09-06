@@ -57,8 +57,9 @@ function UIConfirmDialog:UIConfirmDialog(ui, must_pause, text, callback_ok, call
   self.must_pause = must_pause
 
   -- Check how "high" the dialog must be
-  local _, text_height = self.white_font:sizeOf(text, text_width * TheApp.config.ui_scale)
-  text_height = text_height / TheApp.config.ui_scale -- Scale independent pixels
+  local s = TheApp.gfx:getUIScale()
+  local _, text_height = self.white_font:sizeOf(text, text_width * s)
+  text_height = text_height / s -- Scale independent pixels
 
   self:addPanel(top_frame, 0, 0)  -- Dialog header
   local last_y = top_frame_height
@@ -79,17 +80,11 @@ function UIConfirmDialog:UIConfirmDialog(ui, must_pause, text, callback_ok, call
   self.height = last_y + 63
 
   self:registerKeyHandlers()
-  if self.must_pause then self:systemPause() end
 end
 
 -- Confirm dialogs are used for errors, if it is an error then pause the game
 function UIConfirmDialog:mustPause()
   return self.must_pause
-end
-
---! Function to tell the game a system pause is needed
-function UIConfirmDialog:systemPause()
-  TheApp.world:setSystemPause(true)
 end
 
 function UIConfirmDialog:registerKeyHandlers()
@@ -109,7 +104,6 @@ end
 --!param confirmed (boolean or nil) whether to call the confirm callback (true) or cancel callback (false/nil)
 function UIConfirmDialog:close(confirmed)
   -- NB: Window is closed before executing the callback in order to not save the confirmation dialog in a savegame
-  if self.must_pause then TheApp.world:setSystemPause(false) end -- Error dealt with
   Window.close(self)
   if confirmed then
     if self.callback_ok then
@@ -125,7 +119,7 @@ end
 function UIConfirmDialog:draw(canvas, x, y)
   Window.draw(self, canvas, x, y)
 
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   x, y = x + self.x * s, y + self.y * s
   self.white_font:drawWrapped(canvas, self.text, x + 17 * s, y + 17 * s, text_width * s)
 end

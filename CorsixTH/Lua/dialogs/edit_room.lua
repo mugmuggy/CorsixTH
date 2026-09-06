@@ -198,6 +198,7 @@ function UIEditRoom:cancel()
       self.ui:setDefaultCursor(nil)
       self.check_for_clear_area_timer = nil
       self.humanoids_to_watch = nil
+      self:_setCellFlagsOnBlueprint({avoidTile = false})
     end
     self.phase = "walls"
     self:returnToWallPhase()
@@ -256,37 +257,13 @@ function UIEditRoom:confirm(force)
   end
 end
 
-local function isHumanoidObscuringArea(humanoid, x1, x2, y1, y2)
-  if humanoid.tile_x then
-    if x1 <= humanoid.tile_x and humanoid.tile_x <= x2 and
-        y1 <= humanoid.tile_y and humanoid.tile_y <= y2 then
-      if (x1 == humanoid.tile_x or x2 == humanoid.tile_x) or
-          (y1 == humanoid.tile_y or y2 == humanoid.tile_y) then
-        -- Humanoid not in the rectangle, but might be walking into it
-        local action = humanoid:getCurrentAction()
-        if action.name ~= "walk" then
-          return false
-        end
-        if action.path_x then -- in a (rare) special case, path_x is nil (see action_walk_start)
-          local next_x = action.path_x[action.path_index]
-          local next_y = action.path_y[action.path_index]
-          if x1 >= next_x or next_x >= x2 or y1 >= next_y or next_y >= y2 then
-            return false
-          end
-        end
-      end
-      return true
-    end
-  end
-  return false
-end
-
 function UIEditRoom:clearArea()
   self.confirm_button:enable(false)
   local rect = self.blueprint_rect
   local world = self.ui.app.world
   world:clearCaches() -- To invalidate idle tiles in case we need to move people
   local humanoids_to_watch = {}
+  self:_setCellFlagsOnBlueprint({avoidTile = true})
   do
     local x1 = rect.x - 1
     local x2 = rect.x + rect.w
@@ -294,45 +271,10 @@ function UIEditRoom:clearArea()
     local y2 = rect.y + rect.h
     for _, entity in ipairs(world.entities) do
       if class.is(entity, Humanoid) and
-          isHumanoidObscuringArea(entity, x1, x2, y1, y2) then
+          entity:isObscuringArea(x1, x2, y1, y2) then
         humanoids_to_watch[entity] = true
-
         -- Try to make the humanoid leave the area
-        local current_action = entity:getCurrentAction()
-        local meander = entity.action_queue[2]
-        if meander and meander.name == "meander" then
-          -- Interrupt the idle or walk, which will cause a new meander target
-          -- to be chosen, which will be outside the blueprint rectangle
-          meander.can_idle = false
-          local on_interrupt = current_action.on_interrupt
-          if on_interrupt then
-            current_action.on_interrupt = nil
-            on_interrupt(current_action, entity)
-          end
-        elseif current_action.name == "seek_room" or (meander and meander.name == "seek_room") then
-          -- Make sure that the humanoid doesn't stand idle waiting within the blueprint
-          if current_action.name == "seek_room" then
-            entity:queueAction(MeanderAction():setCount(1):setMustHappen(true), 0)
-          else
-            meander.done_walk = false
-          end
-        else
-          -- Look for a queue action and re-arrange the people in it, which
-          -- should cause anyone queueing within the blueprint to move
-          for _, action in ipairs(entity.action_queue) do
-            if action.name == "queue" then
-              for _, humanoid in ipairs(action.queue) do
-                local callbacks = action.queue.callbacks[humanoid]
-                if callbacks then
-                  callbacks:onChangeQueuePosition(humanoid)
-                end
-              end
-              break
-            end
-          end
-          -- TODO: Consider any other actions which might be causing the
-          -- humanoid to be staying within the rectangle for a long time.
-        end
+        entity:leaveArea()
       end
     end
   end
@@ -366,7 +308,7 @@ function UIEditRoom:onTick()
           if not humanoid.hospital then
             self.humanoids_to_watch[humanoid] = nil
           end
-        elseif not isHumanoidObscuringArea(humanoid, x1, x2, y1, y2) then
+        elseif not humanoid:isObscuringArea(x1, x2, y1, y2) then
           self.humanoids_to_watch[humanoid] = nil
         end
       end
@@ -388,6 +330,7 @@ function UIEditRoom:finishRoom()
   local map = self.ui.app.map.th
   local rect = self.blueprint_rect
   local door, door2
+  self:_setCellFlagsOnBlueprint({avoidTile = false})
   -- Add the transparency flag if it is set.
   local flag = 0
   if self.ui.transparent_walls then
@@ -404,7 +347,6 @@ function UIEditRoom:finishRoom()
       return  map:getCell(wall_x, wall_y, layer) == spr_num1
           or map:getCell(wall_x, wall_y, layer) == spr_num2
     end
-
 
     -- If a wall is built which is normal to an external window, then said
     -- window needs to be removed, otherwise it looks odd.
@@ -738,7 +680,7 @@ function UIEditRoom:removeRoom(save_objects, room, world)
       self.objects_backup[k] = { object = o.object, qty = o.qty, state = o.state }
     end
 
-    UIPlaceObjects.removeAllObjects(self, true)
+    UIPlaceObjects.removeAllObjects(self)
   end
 
   self:_remove_wall_line(room.x, room.y, 0, 1, room.height, 3, -1,  0, world)
@@ -769,6 +711,7 @@ function UIEditRoom:returnToDoorPhase()
   rect.w = 0
   rect.h = 0
   self:setBlueprintRect(rect.x, rect.y, old_w, old_h)
+  self:_setCellFlagsOnBlueprint({avoidTile = false})
 
   -- We've gone all the way back to wall phase, so step forward to door phase
   self.phase = "door"
@@ -939,17 +882,19 @@ end
 
 function UIEditRoom:enterDoorPhase()
   self.ui:tutorialStep(3, 8, 9)
+  local rect = self.blueprint_rect
+  local map = self.ui.app.map.th
+
   -- make tiles impassable
-  for y = self.blueprint_rect.y, self.blueprint_rect.y + self.blueprint_rect.h - 1 do
-    for x = self.blueprint_rect.x, self.blueprint_rect.x + self.blueprint_rect.w - 1 do
-      self.ui.app.map:setCellFlags(x, y, {passable = false})
-    end
-  end
+  self:_setCellFlagsOnBlueprint({passable = false})
 
   -- check if all adjacent tiles of the rooms are still connected
   if not self:checkReachability() then
-    if self.ui.app.config.allow_blocking_off_areas then
-      print("Blocking off areas is allowed with room " .. self.blueprint_rect.x .. ", " .. self.blueprint_rect.y .. ".")
+    if self.ui.app.config.blocking_off_areas == 3 then
+      -- all-permissive placing approach
+      -- This could lead to crashes, so we'll record this in the log so that during investigation
+      -- we'll be able to know that safe placement was disabled.
+      TheApp.world:gameLog("Blocking off areas is allowed with room " .. self.blueprint_rect.x .. ", " .. self.blueprint_rect.y .. ".")
     else
       -- undo passable flags and go back to walls phase
       self.phase = "walls"
@@ -960,13 +905,15 @@ function UIEditRoom:enterDoorPhase()
     end
   end
 
+  -- make tiles passable back
+  self:_setCellFlagsOnBlueprint({passable = true})
+
   self.desc_text = _S.place_objects_window.place_door
   self.confirm_button:enable(false) -- Confirmation is via placing door
 
   -- Change the floor tiles to opaque blue
-  local map = self.ui.app.map.th
-  for y = self.blueprint_rect.y, self.blueprint_rect.y + self.blueprint_rect.h - 1 do
-    for x = self.blueprint_rect.x, self.blueprint_rect.x + self.blueprint_rect.w - 1 do
+  for y = rect.y, rect.y + rect.h - 1 do
+    for x = rect.x, rect.x + rect.w - 1 do
       map:setCell(x, y, 4, 24)
     end
   end
@@ -1060,7 +1007,7 @@ function UIEditRoom:draw(canvas, ...)
   if self.world.user_actions_allowed then
     local ui = self.ui
     local x, y = ui:WorldToScreen(self.mouse_cell_x, self.mouse_cell_y)
-    local zoom = self.ui.zoom_factor
+    local zoom = self.ui:getEffectiveZoom()
     if canvas:scale(zoom) then
       x = math.floor(x / zoom)
       y = math.floor(y / zoom)
@@ -1096,7 +1043,7 @@ local window_floor_blueprint_markers = {
 }
 
 function UIEditRoom:onLeftButtonDown(x, y)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   if self.phase == "walls" then
     if 0 <= x and x < self.width * s and 0 <= y and y < self.height * s then -- luacheck: ignore 542
     else
@@ -1123,8 +1070,8 @@ function UIEditRoom:onLeftButtonDown(x, y)
 end
 
 --! Attempt to remove a window placed on the room blueprints
---!param x co-ordinate
---!param y co-ordinate
+--!param x coordinate
+--!param y coordinate
 function UIEditRoom:tryRemoveWindowFromWall(x, y)
   local cell_x, cell_y, wall_dir = self:screenToWall(self.x + x, self.y + y)
   if not cell_x then
@@ -1284,7 +1231,7 @@ local function validDoorTile(xpos, ypos, player_id, world)
   if tile_flags.thob ~= 0 and tile_flags.thob ~= 62 then return false end
   -- check if its passable that no object footprint blocks it
   if tile_flags.passable then return world:isTileExclusivelyPassable(xpos, ypos, 1) end
-  return true
+  return false
 end
 
 --! Calculate position offsets and door blueprint wall values
@@ -1658,6 +1605,16 @@ function UIEditRoom:placeObject()
   local obj = UIPlaceObjects.placeObject(self, true)
   if obj then
     self:checkEnableConfirm()
+  end
+end
+
+function UIEditRoom:_setCellFlagsOnBlueprint(flags)
+  local rect = self.blueprint_rect
+  local map = self.ui.app.map.th
+  for y = rect.y, rect.y + rect.h - 1 do
+    for x = rect.x, rect.x + rect.w - 1 do
+      map:setCellFlags(x, y, flags)
+    end
   end
 end
 

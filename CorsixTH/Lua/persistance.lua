@@ -134,7 +134,7 @@ local function MakePermanentObjectsTable(inverted)
 
   -- Bits of the app
   permanent[TheApp] = "TheApp"
-  for _, key in ipairs({"config", "modes", "video", "strings", "audio", "gfx", "fs"}) do
+  for _, key in ipairs({"config", "modes", "video", "strings", "audio", "gfx", "fs", "moviePlayer"}) do
     permanent[TheApp[key]] = inverted and "TheApp." .. key or {global_fetch, "TheApp", key}
   end
   for _, collection in ipairs({"walls", "objects", "rooms", "humanoid_actions", "diseases"}) do
@@ -316,9 +316,8 @@ function LoadGame(data)
   -- Check if the blueish tone should be applied.
   -- Note: Blue filter control should be handled from world or ui, however when
   -- loading a game we should let persistence do it.
-  if not TheApp.ui:checkForMustPauseWindows() and TheApp.world:isUserActionProhibited() then
-    TheApp.video:setBlueFilterActive(true)
-  end
+  TheApp.world:updateUserActionsAllowed()
+  TheApp.world:updateScreenBlueFilter()
 end
 
 function LoadGameFile(filename)

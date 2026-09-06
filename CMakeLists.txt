@@ -15,17 +15,21 @@
 # Dependency resolution
 #   - WITH_LUAJIT     : Use LuaJIT instead of Lua (must specify library path) (no)
 #   - WITH_LUAROCKS : Install required luarocks in the macOS app (requires luarocks)
-#   - FETCH_CATCH2: Use FetchContent to obtain Catch2 if ENABLE_UNIT_TESTS=yes
+#   - FETCH_CATCH2 : Use FetchContent to obtain Catch2 if ENABLE_UNIT_TESTS=yes
+#   - FETCH_SOUNDFONT : Use FetchContent to download a soundfont to use (no)
+#   - FETCH_UNICODE_FONT: Use FetchContent to download the GoNoto Unicode font (no)
+#   - FETCH_SDL_MIXER: Use FetchContent to download SDL3_Mixer
 
 # Tests and debug options
 #   - ENABLE_UNIT_TESTS : Enable Unit Testing Target (requires Catch2) (no)
 #   - ENABLE_SANITIZERS : Build with AddressSanitizer (ASan) and UndefinedBehaviorSanitizer (UBSan) enabled (no)
+#   - WITH_TRACY : Build with Tracy profiling enabled (no)
 
 # Additional build targets
 #   - BUILD_ANIMVIEW : Generate AnimView build files (no)
 #   - BUILD_TOOLS : Generate cli tools
 
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.16)
 
 # Define our options
 option(BUILD_CORSIXTH "Builds the main game" ON)
@@ -38,6 +42,10 @@ option(ENABLE_UNIT_TESTS "Enables Unit Testing Targets" OFF)
 option(BUILD_ANIMVIEW "Build the animation viewer as part of the build process" OFF)
 option(BUILD_TOOLS "Build additional CLI tools (rnc_decode)" OFF)
 option(ENABLE_SANITIZERS "Build with ASan and UBSan enabled" OFF)
+option(WITH_TRACY "Build with Tracy profiling enabled" OFF)
+option(FETCH_SOUNDFONT "Download soundfont asset" OFF)
+option(FETCH_UNICODE_FONT "Download GoNoto Unicode font" OFF)
+option(FETCH_SDL_MIXER "Download SDL3_mixer" OFF)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/CMake)
 
@@ -56,12 +64,19 @@ endif()
 if(ENABLE_UNIT_TESTS)
   list(APPEND VCPKG_MANIFEST_FEATURES "catch2")
 endif()
+if(WITH_TRACY)
+  list(APPEND VCPKG_MANIFEST_FEATURES "tracy")
+endif()
 
 project(CorsixTH_Top_Level)
 
 if(ENABLE_UNIT_TESTS)
   enable_testing()
 endif()
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MINGW)
   set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
@@ -87,9 +102,11 @@ else()
   set(SEARCH_LOCAL_DATADIRS_DEFAULT OFF)
 endif()
 
-option(SEARCH_LOCAL_DATADIRS
+option(
+  SEARCH_LOCAL_DATADIRS
   "Search resources in the working directory and the program directory where the executable stores."
-  ${SEARCH_LOCAL_DATADIRS_DEFAULT})
+  ${SEARCH_LOCAL_DATADIRS_DEFAULT}
+)
 
 if(APPLE)
   set(WITH_FONT_DEFAULT "/Library/Fonts/Arial Unicode.ttf")

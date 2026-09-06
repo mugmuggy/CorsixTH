@@ -552,7 +552,8 @@ function Humanoid:findObjectsInSquare(size, object_spec)
   end
 
   local world_map = self.world.map
-  local self_room_id = world_map:getRoomId(self.tile_x, self.tile_y)
+  local th_map = world_map.th
+  local self_room_id = th_map:getRoomId(self.tile_x, self.tile_y)
 
   -- Search the rectangle for as far as it is within the world.
   local width, height = world_map.th:size()
@@ -562,7 +563,7 @@ function Humanoid:findObjectsInSquare(size, object_spec)
   for x = self.tile_x - size, self.tile_x + size do
     if x >= 1 and x <= width then
       for y = self.tile_y - size, self.tile_y + size do
-        if y >= 1 and y <= height and world_map:getRoomId(x, y) == self_room_id then
+        if y >= 1 and y <= height and th_map:getRoomId(x, y) == self_room_id then
           for _, obj in ipairs(entity_map:getObjectsAtCoordinate(x, y)) do
             local entry = objs_table[obj.id]
             if entry then entry[#entry + 1] = obj end
@@ -854,6 +855,54 @@ end
 function Humanoid:walkTo(tile_x, tile_y, must_happen)
   self:setNextAction(WalkAction(tile_x, tile_y)
       :setMustHappen(not not must_happen))
+end
+
+--! Function attempts to expel the humanoid from the area.
+-- It does not require any input parameters since it expects that the area
+-- to be left is already marked with the `avoidTile` tile flag.
+function Humanoid:leaveArea()
+  -- TODO: Currently, this function simply forces the humanoid to move.
+  -- However, it doesn't take into account the specific area to be exited or
+  -- the direction in which it needs to exit.
+  -- As a result, the humanoid may exit the area in a less-than-optimal manner.
+  local current_action = self:getCurrentAction()
+  local meander = self.action_queue[2]
+  if meander and meander.name == "meander" then
+    -- Interrupt the idle or walk, which will cause a new meander target
+    -- to be chosen, which will be outside the blueprint rectangle
+    meander.can_idle = false
+    local on_interrupt = current_action.on_interrupt
+    if on_interrupt then
+      current_action.on_interrupt = nil
+      on_interrupt(current_action, self)
+    end
+  elseif current_action.name == "seek_room" or (meander and meander.name == "seek_room") then
+    -- Make sure that the humanoid doesn't stand idle waiting within the blueprint
+    if current_action.name == "seek_room" then
+      self:queueAction(MeanderAction():setCount(1):setMustHappen(true), 0)
+    else
+      meander.done_walk = false
+    end
+  elseif current_action.name == "walk" then
+    -- Make the humanoid to reroute urgently to leave the blueprint
+    self:queueAction(MeanderAction():setCount(1):setMustHappen(true), 0)
+  else
+    -- Look for a queue action and re-arrange the people in it, which
+    -- should cause anyone queueing within the blueprint to move
+    for _, action in ipairs(self.action_queue) do
+      if action.name == "queue" then
+        for _, humanoid in ipairs(action.queue) do
+          local callbacks = action.queue.callbacks[humanoid]
+          if callbacks then
+            callbacks:onChangeQueuePosition(humanoid)
+          end
+        end
+        break
+      end
+    end
+    -- TODO: Consider any other actions which might be causing the
+    -- humanoid to be staying within the rectangle for a long time.
+  end
 end
 
 -- Stub functions for handling fatigue. These are overridden by the staff subclass,
@@ -1158,4 +1207,55 @@ function Humanoid:unexpectFromRoom(dest_room)
 --!return (float)
 function Humanoid:getAttribute(attribute, default_value)
   return self.attributes[attribute] or default_value or 0
+end
+
+--! Checks whether a humanoid is within the specified area or is currently
+-- walking into it. To properly check whether a humanoid is entering an area,
+-- pass coordinates 1 tile outside the square where actually need to build.
+-- For example, if the intended wall of the room being built is outside the
+-- perimeter (x1, y1) (x2, y2), then need to pass (x1-1, y1-1) (x2+1, y2+1).
+-- Example input parameters: (50, 55, 60, 65).
+--!param x1 (int) north-west X position of target area.
+--!param x2 (int) south-east X position of target area.
+--!param y1 (int) north-west Y position of target area.
+--!param y2 (int) south-east Y position of target area.
+--!return (bool) true if obscuring given area.
+function Humanoid:isObscuringArea(x1, x2, y1, y2)
+  if self.tile_x then
+    if x1 <= self.tile_x and self.tile_x <= x2 and
+        y1 <= self.tile_y and self.tile_y <= y2 then
+      if (x1 == self.tile_x or x2 == self.tile_x) or
+          (y1 == self.tile_y or y2 == self.tile_y) then
+        -- Humanoid not in the rectangle, but might be walking into it
+        local action = self:getCurrentAction()
+        if action.name ~= "walk" then
+          return false
+        end
+        if action.path_x then -- in a (rare) special case, path_x is nil (see action_walk_start)
+          local next_x = action.path_x[action.path_index]
+          local next_y = action.path_y[action.path_index]
+          if x1 >= next_x or next_x >= x2 or y1 >= next_y or next_y >= y2 then
+            return false
+          end
+        end
+      end
+      return true
+    end
+  end
+  return false
+end
+
+--! Check whether humanoids (staff and Inspector) are meandering
+--!return true if they currently has a meander action
+function Humanoid:isMeandering()
+  if #self.action_queue < 2 then return false end
+
+  -- "meander" action always insert "move" or "idle" action before itself.
+  -- so when humanoid "meandering" his action queue usually looks like:
+  -- [1 idle, 2 meander] or [1 walk, 2 meander].
+  local idle_is_first = self.action_queue[1].name == "idle"
+  local walk_is_first = self.action_queue[1].name == "walk"
+  local meander_is_second = self.action_queue[2].name == "meander"
+
+  return (idle_is_first or walk_is_first) and meander_is_second
 end

@@ -80,6 +80,7 @@ function UISoundSettings:UISoundSettings(ui, mode)
   self:setDefaultPosition(0.5, 0.25)
   self.default_button_sound = "selectx.wav"
   self.app = ui.app
+  local built_in = app.gfx:loadMenuFont()
 
 
   self.volume_options = { { text = _S.customise_window.option_off, volume = 0 } }
@@ -125,7 +126,7 @@ function UISoundSettings:UISoundSettings(ui, mode)
   self:addBevelPanel(LBL_X, y, LBL_WIDTH, LBL_HEIGHT, col_shadow, col_bg, col_bg)
       :setLabel(_S.audio_window.sound_volume)
       :setTooltip(_S.tooltip.audio_window.sound_volume).lowered = true
-  self.sound_volume_panel = self:addBevelPanel(BTN_X, y, BTN_WIDTH, BTN_HEIGHT, col_bg)
+  self.sound_volume_panel = self:addBevelPanel(BTN_X, y, BTN_WIDTH, BTN_HEIGHT, Colours.Setting, nil, nil, nil, Colours.SettingActive)
       :setLabel(sound_volume_label)
   self.sound_volume_button = self.sound_volume_panel
       :makeToggleButton(0, 0, BTN_WIDTH, BTN_HEIGHT, nil, self.dropdownVolume)
@@ -138,7 +139,7 @@ function UISoundSettings:UISoundSettings(ui, mode)
   self:addBevelPanel(LBL_X, y, LBL_WIDTH, LBL_HEIGHT, col_shadow, col_bg, col_bg)
       :setLabel(_S.audio_window.announcement_volume)
       :setTooltip(_S.tooltip.audio_window.announcement_volume).lowered = true
-  self.announcement_volume_panel = self:addBevelPanel(BTN_X, y, BTN_WIDTH, BTN_HEIGHT, col_bg)
+  self.announcement_volume_panel = self:addBevelPanel(BTN_X, y, BTN_WIDTH, BTN_HEIGHT, Colours.Setting, nil, nil, nil, Colours.SettingActive)
       :setLabel(announcement_volume_label)
   self.announcement_volume_button = self.announcement_volume_panel
       :makeToggleButton(0, 0, BTN_WIDTH, BTN_HEIGHT, nil, self.dropdownVolume)
@@ -152,7 +153,7 @@ function UISoundSettings:UISoundSettings(ui, mode)
   self:addBevelPanel(LBL_X, y, LBL_WIDTH, LBL_HEIGHT, col_shadow, col_bg, col_bg)
       :setLabel(_S.audio_window.music_volume)
       :setTooltip(_S.tooltip.audio_window.music_volume).lowered = true
-  self.music_volume_panel = self:addBevelPanel(BTN_X, y, BTN_WIDTH, BTN_HEIGHT, col_bg)
+  self.music_volume_panel = self:addBevelPanel(BTN_X, y, BTN_WIDTH, BTN_HEIGHT, Colours.Setting, nil, nil, nil, Colours.SettingActive)
       :setLabel(music_volume_label_text)
   self.music_volume_button = self.music_volume_panel
       :makeToggleButton(0, 0, BTN_WIDTH, BTN_HEIGHT, nil, self.dropdownVolume)
@@ -164,7 +165,7 @@ function UISoundSettings:UISoundSettings(ui, mode)
   self:addBevelPanel(LBL_X, y, LBL_WIDTH, LBL_HEIGHT, col_shadow, col_bg, col_bg)
       :setLabel(_S.audio_window.midi_api)
       :setTooltip(_S.tooltip.audio_window.midi_api).lowered = true
-  self.midi_api_panel = self:addBevelPanel(BTN_X, y, BTN_WIDTH, BTN_HEIGHT, col_bg)
+  self.midi_api_panel = self:addBevelPanel(BTN_X, y, BTN_WIDTH, BTN_HEIGHT, Colours.Setting, nil, nil, nil, Colours.SettingActive)
       :setLabel(midi_api_label)
   self.midi_api_button = self.midi_api_panel
       :makeToggleButton(0, 0, BTN_WIDTH, BTN_HEIGHT, nil, self.dropdownMidiApi)
@@ -182,9 +183,11 @@ function UISoundSettings:UISoundSettings(ui, mode)
   local tooltip_soundfont = app.config.soundfont and
       _S.tooltip.audio_window.browse_soundfont:format(app.config.soundfont) or
       _S.tooltip.audio_window.no_soundfont_specified
+  local soundfont_path = app.config.soundfont
   local soundfont_button_panel = self:addBevelPanel(BTN_X, y, BTN_WIDTH, BTN_HEIGHT, col_bg)
   soundfont_button_panel
-      :setLabel(app.config.soundfont and app.config.soundfont or tooltip_soundfont)
+      :setLabel(soundfont_path or tooltip_soundfont,
+          soundfont_path and built_in)
       :setAutoClip(true)
       :setVisible(not app.config.midi_api)
   local soundfont_button = soundfont_button_panel
@@ -202,7 +205,7 @@ function UISoundSettings:UISoundSettings(ui, mode)
       :setVisible(not not app.config.midi_api)
   midi_port_label_panel.lowered = true
 
-  self.midi_port_panel = self:addBevelPanel(BTN_X, y, BTN_WIDTH, BTN_HEIGHT, col_bg)
+  self.midi_port_panel = self:addBevelPanel(BTN_X, y, BTN_WIDTH, BTN_HEIGHT, Colours.Setting, nil, nil, nil, Colours.SettingActive)
       :setLabel(midi_port_label_text)
       :setVisible(not not app.config.midi_api)
   self.midi_port_button = self.midi_port_panel
@@ -233,9 +236,7 @@ end
 function UISoundSettings:reinitAudio()
   local app = self.ui.app
   app.audio:stopBackgroundTrack()
-  app.audio.has_bg_music = false
-  app.audio.not_loaded = not app.config.audio
-  app.audio.speech_file_name = nil
+  app.audio:destroy()
   app.audio:init()
   app:initLanguage()
   app.audio:playRandomBackgroundTrack()
@@ -277,7 +278,7 @@ function UISoundSettings:dropdownVolume(activate, btn)
       select_callback = self.selectMusicVolume
     end
 
-    self.volume_dropdown = UIDropdown(self.ui, self, btn, self.volume_options, select_callback)
+    self.volume_dropdown = UIDropdown(self.ui, self, btn, self.volume_options, select_callback, Colours.SettingActive, Colours.Scrollbar)
     self:addWindow(self.volume_dropdown)
   else
     self.sound_volume_button:setToggleState(false)
@@ -299,7 +300,7 @@ function UISoundSettings:dropdownMidiApi(activate)
     self:closeAllDropdowns()
     self.midi_api_button:setToggleState(true)
 
-    self.midi_api_dropdown = UIDropdown(self.ui, self, self.midi_api_button, self.midi_api_options, self.selectMidiApi)
+    self.midi_api_dropdown = UIDropdown(self.ui, self, self.midi_api_button, self.midi_api_options, self.selectMidiApi, Colours.SettingActive, Colours.Scrollbar)
     self:addWindow(self.midi_api_dropdown)
   else
     self.midi_api_button:setToggleState(false)
@@ -318,7 +319,7 @@ function UISoundSettings:dropdownMidiPort(activate)
     self:closeAllDropdowns()
     self.midi_port_button:setToggleState(true)
 
-    self.midi_port_dropdown = UIDropdown(self.ui, self, self.midi_port_button, self.midi_port_options, self.selectMidiPort)
+    self.midi_port_dropdown = UIDropdown(self.ui, self, self.midi_port_button, self.midi_port_options, self.selectMidiPort, Colours.SettingActive, Colours.Scrollbar)
     self:addWindow(self.midi_port_dropdown)
   else
     self.midi_port_button:setToggleState(false)

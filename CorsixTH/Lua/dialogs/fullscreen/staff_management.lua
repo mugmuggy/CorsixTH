@@ -31,7 +31,7 @@ function UIStaffManagement:UIStaffManagement(ui)
   local gfx = ui.app.gfx
   if not pcall(function()
     self.background = gfx:loadRaw("Staff01V", 640, 480, "QData", "QData", "Staff01V.pal", true)
-    local palette = gfx:loadPalette("QData", "Staff01V.pal", true)
+    local palette = gfx:getPalette("Staff01V.pal")
     self.panel_sprites = gfx:loadSpriteTable("QData", "Staff02V", true, palette)
     self.title_font = gfx:loadFontAndSpriteTable("QData", "Font01V", false, palette, { apply_ui_scale = true })
     self.blue_font = gfx:loadFontAndSpriteTable("QData", "Font02V", false, palette, { apply_ui_scale = true })
@@ -179,13 +179,31 @@ function UIStaffManagement:updateStaffList(staff_member_removed)
     Handyman = {},
     Receptionist = {},
   }
-  for _, staff in ipairs(hosp.staff) do
+  for i, staff in ipairs(hosp.staff) do
+    staff.hire_order = i
     local list = staff_members[staff.profile.humanoid_class]
     list[#list + 1] = staff
     -- The selected staff might have been moved because someone else was removed from the list.
     if selected_staff == staff then
       self.selected_staff = #list
     end
+  end
+  -- Sort staff tables by attribute and direction
+  for _, staff_tbl in pairs(staff_members) do
+    table.sort(staff_tbl, function(left, right)
+      local ascending = self.list_direction == "up"
+      local a = ascending and left or right
+      local b = not ascending and left or right
+      if self.list_order == "hire" then
+        return a.hire_order > b.hire_order
+      elseif self.list_order == "morale" then
+        return a:getAttribute("happiness") > b:getAttribute("happiness")
+      elseif self.list_order == "tiredness" then
+        return a:getAttribute("fatigue") > b:getAttribute("fatigue")
+      elseif self.list_order == "skill" then
+        return a.profile.skill > b.profile.skill
+      end
+    end)
   end
   self.staff_members = staff_members
   if staff_member_removed then
@@ -239,7 +257,7 @@ function UIStaffManagement:selectStaff(staff)
 end
 
 function UIStaffManagement:draw(canvas, x, y)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   canvas:scale(s, "bitmap")
   self.background:draw(canvas, self.x * s + x, self.y * s + y)
   canvas:scale(1, "bitmap")
@@ -256,10 +274,11 @@ function UIStaffManagement:draw(canvas, x, y)
 
   -- Number of employees
   local ney = y + 57 * s
-  titles:draw(canvas, #self.staff_members["Doctor"], x + 79 * s, ney)
-  titles:draw(canvas, #self.staff_members["Nurse"], x + 145 * s, ney)
-  titles:draw(canvas, #self.staff_members["Handyman"], x + 211 * s, ney)
-  titles:draw(canvas, #self.staff_members["Receptionist"], x + 277 * s, ney)
+  local ne_width = 58 * s
+  titles:draw(canvas, #self.staff_members["Doctor"], x + 53 * s, ney, ne_width, 0)
+  titles:draw(canvas, #self.staff_members["Nurse"], x + 119 * s, ney, ne_width, 0)
+  titles:draw(canvas, #self.staff_members["Handyman"], x + 185 * s, ney, ne_width, 0)
+  titles:draw(canvas, #self.staff_members["Receptionist"], x + 251 * s, ney, ne_width, 0)
 
   local total_happiness = 0
   local total_fatigue = 0
@@ -438,13 +457,32 @@ end
 
 function UIStaffManagement:onMouseDown(code, x, y)
   if code == "left" then
-    local s = TheApp.config.ui_scale
+    local s = TheApp.gfx:getUIScale()
     local inside_staff_list_area = (x > 50 * s and x < 624 * s) and (y > 82 * s and y < 351 * s)
+    local inside_header_area = (x > 321 * s and x < 629 * s) and (y > 22 * s and y < 46 * s)
     if inside_staff_list_area then
       -- Hit staff row
       if #self.staff_members[self.category] - (self.page - 1)*10 > math_floor((y - 81 * s)/(27 * s)) then
         self.selected_staff = math_floor((y - 81 * s)/(27 * s)) + 1 + (self.page - 1)*10
         TheApp.audio:playSound("selectx.wav")
+      end
+    elseif inside_header_area then
+      local function order_by(attribute)
+        if self.list_order == attribute then -- Change direction
+          if not self.list_direction or self.list_direction == "down" then
+            self.list_direction = "up"
+          else
+            self.list_order = "hire"
+            self.list_direction = "down"
+          end
+        else
+          self.list_order = attribute -- Switch order attribute
+        end
+        self:updateStaffList()
+      end
+      if x < 422 * s then order_by("morale")
+      elseif x > 425 * s and x < 527 * s then order_by("tiredness")
+      elseif x > 529 * s then order_by("skill")
       end
     else
       local inside_view_of_the_staff_area = (x > 497 * s and x < 580 * s) and (y > 373 * s and y < 455 * s)
@@ -457,7 +495,7 @@ function UIStaffManagement:onMouseDown(code, x, y)
 end
 
 function UIStaffManagement:onMouseMove(x, y, dx, dy)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   local current_hover_id
   local inside_staff_list_area
   local header_height = 81 * s
@@ -492,7 +530,7 @@ end
 
 function UIStaffManagement:onMouseUp(code, x, y)
   if code == "left" then
-    local s = TheApp.config.ui_scale
+    local s = TheApp.gfx:getUIScale()
     local inside_view_of_the_staff_area = (x > 497 * s and x < 580 * s) and (y > 373 * s and y < 455 * s)
     if inside_view_of_the_staff_area and self.selected_staff then
       -- Hit in the view of the staff.
@@ -656,7 +694,7 @@ function UIStaffManagement:afterLoad(old, new)
   if old < 236 then
     local gfx = TheApp.gfx
     self.background = gfx:loadRaw("Staff01V", 640, 480, "QData", "QData", "Staff01V.pal", true)
-    local palette = gfx:loadPalette("QData", "Staff01V.pal", true)
+    local palette = gfx:getPalette("Staff01V.pal")
     self.panel_sprites = gfx:loadSpriteTable("QData", "Staff02V", true, palette, { apply_ui_scale = true })
     self.title_font = gfx:loadFontAndSpriteTable("QData", "Font01V", false, palette, { apply_ui_scale = true })
     self.face_parts = gfx:loadRaw("Face01V", 65, 1350, nil, "Data", "MPalette.dat", false, { flags = DrawFlags.Nearest })

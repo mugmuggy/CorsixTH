@@ -51,7 +51,7 @@ function UIAnnualReport:UIAnnualReport(ui, world)
   self.rep_amount = 0
 
   if not pcall(function()
-    local palette = gfx:loadPalette("QData", "Award02V.pal", true)
+    local palette = gfx:getPalette("Award02V.pal")
 
     -- Right now the statistics are first
     --self.background = gfx:loadRaw("Fame01V", 640, 480)
@@ -510,7 +510,7 @@ function UIAnnualReport:changePage(page_no)
 end
 
 function UIAnnualReport:draw(canvas, x, y)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   canvas:scale(s, "bitmap")
   self.background:draw(canvas, self.x * s + x, self.y * s + y)
   canvas:scale(1, "bitmap")
@@ -578,7 +578,7 @@ function UIAnnualReport:drawStatisticsScreen(canvas, x, y)
 
   local font = self.stat_font
   local world = self.ui.app.world
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
 
   -- Draw titles
   -- world date year is + 1, so adding it to 1998 realigns it
@@ -662,7 +662,7 @@ function UIAnnualReport:afterLoad(old, new)
   if old < 236 then
     local gfx = TheApp.gfx
 
-    local palette = gfx:loadPalette("QData", "Award02V.pal", true)
+    local palette = gfx:getPalette("Award02V.pal")
     self.award_background = gfx:loadRaw("Award01V", 640, 480)
     self.stat_background = gfx:loadRaw("Award02V", 640, 480, "QData", "QData", "Award02V.pal", true)
     self.background = self.stat_background

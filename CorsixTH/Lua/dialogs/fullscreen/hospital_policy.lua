@@ -29,7 +29,7 @@ function UIPolicy:UIPolicy(ui)
   local gfx = ui.app.gfx
   if not pcall(function()
     self.background = gfx:loadRaw("Pol01V", 640, 480, "QData", "QData", "Pol01V.pal", true)
-    local palette = gfx:loadPalette("QData", "Pol01V.pal", true)
+    local palette = gfx:getPalette("Pol01V.pal")
     self.panel_sprites = gfx:loadSpriteTable("QData", "Pol02V", true, palette)
     self.label_font = gfx:loadFontAndSpriteTable("QData", "Font74V", false, palette, { apply_ui_scale = true })
     self.text_font = gfx:loadFontAndSpriteTable("QData", "Font105V", false, palette, { apply_ui_scale = true })
@@ -119,7 +119,7 @@ function UIPolicy:UIPolicy(ui)
 end
 
 function UIPolicy:draw(canvas, x, y)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   canvas:scale(s, "bitmap")
   self.background:draw(canvas, self.x * s + x, self.y * s + y)
   canvas:scale(1, "bitmap")
@@ -157,7 +157,7 @@ end
 function UIPolicy:onMouseMove(x, y, dx, dy)
   local repaint = UIFullscreen.onMouseMove(self, x, y, dx, dy)
   if self.moving_panel then -- A slider is being moved.
-    local s = TheApp.config.ui_scale
+    local s = TheApp.gfx:getUIScale()
     local p = self.moving_panel
     self.moved_x = self.moved_x + dx / s
     local new_x = math.floor(self.moved_x + self.down_x - self.moving_panel.w / 2 - self.offset)
@@ -209,7 +209,7 @@ end
 --!param y (int) Y position of the mouse.
 --!return Slider that was detected at the given position, or nil
 function UIPolicy:panelHit(x, y)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   x = x / s
   y = y / s
   for _, panel in ipairs(self.sliders_z) do
@@ -241,7 +241,7 @@ function UIPolicy:afterLoad(old, new)
     local gfx = TheApp.gfx
 
     self.background = gfx:loadRaw("Pol01V", 640, 480, "QData", "QData", "Pol01V.pal", true)
-    local palette = gfx:loadPalette("QData", "Pol01V.pal", true)
+    local palette = gfx:getPalette("Pol01V.pal")
     self.panel_sprites = gfx:loadSpriteTable("QData", "Pol02V", true, palette)
     self.label_font = gfx:loadFontAndSpriteTable("QData", "Font74V", false, palette, { apply_ui_scale = true })
     self.text_font = gfx:loadFontAndSpriteTable("QData", "Font105V", false, palette, { apply_ui_scale = true })

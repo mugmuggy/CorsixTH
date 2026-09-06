@@ -17,11 +17,23 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
+-- Translator warning:
+-- Theme Hospital's original bitmap fonts have a limited character set, and
+-- some letters are missing; supported characters are case-sensitive.
+-- Unsupported characters appear as "?" in game. See the supported characters:
+-- https://github.com/CorsixTH/CorsixTH/wiki/Localization
+-- Translators may use plain-character substitutions (for example, "e" for an
+-- accented "e").
+-- If substitutions are unsuitable, change Font("cp437") to Font("unicode")
+-- to use the Unicode font instead. You may translate this note into this
+-- file's language if that would help other translators.
 
+Font("cp437")
 Language("Svenska", "Swedish", "sv", "swe")
 Inherit("english")
 Inherit("original_strings", 5)
 Encoding(utf8)
+IsArabicNumerals(true)
 
 -------------------------------  OVERRIDE  ----------------------------------
 object.reception_desk = "Reception"
@@ -337,8 +349,6 @@ options_window = {
   option_on = "På",
   option_off = "Av",
   fullscreen = "Helskärm",
-  resolution = "Upplösning",
-  custom_resolution = "Anpassad...",
   width = "Bredd",
   height = "Höjd",
   customise = "Anpassa",
@@ -352,8 +362,6 @@ options_window = {
 tooltip.options_window = {
   fullscreen = "Om spelet ska köras i fullskärmsläge eller fönsterläge",
   fullscreen_button = "Klicka för att gå mellan fönster och helskärm",
-  resolution = "Upplösning spelet ska köras i",
-  select_resolution = "Välj en ny upplösning",
   width = "Fyll i önskad skärmbredd",
   height = "Fyll i önskad skärmhöjd",
   apply = "Tillämpa den valda upplösningen",
@@ -431,7 +439,7 @@ tooltip.folders_window = {
   no_font_specified = "Ingen typsnittsfil vald än!",
   not_specified = "Ingen sökväg vald än!",
   default = "Standardsökväg",
-  reset_to_default = "Återställ mappen till standardsökvägen",
+  reset_to_default = "Återställ mappen till standardsökvägen ( %1% )",
   back  = "Stäng den här dialogen och återgå till alternativmenyn",
 }
 
@@ -742,6 +750,3 @@ original_credits[361] = "."
 
 --------------------------------  UNUSED  -----------------------------------
 ------------------- (kept for backwards compatibility) ----------------------
-
-options_window.change_resolution = "Ändra upplösning"
-tooltip.options_window.change_resolution = "Ändra upplösning till de dimensioner ifyllda till vänster"

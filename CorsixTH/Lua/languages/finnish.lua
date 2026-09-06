@@ -59,6 +59,16 @@ This file contains UTF-8 text. Make sure your editor is set to UTF-8.
         section A to keep similar strings close to each other.
 
 -----------------------------------------------------------------------------]]
+-- Translator warning:
+-- Theme Hospital's original bitmap fonts have a limited character set, and
+-- some letters are missing; supported characters are case-sensitive.
+-- Unsupported characters appear as "?" in game. See the supported characters:
+-- https://github.com/CorsixTH/CorsixTH/wiki/Localization
+-- Translators may use plain-character substitutions (for example, "e" for an
+-- accented "e").
+-- If substitutions are unsuitable, change Font("cp437") to Font("unicode")
+-- to use the Unicode font instead. You may translate this note into this
+-- file's language if that would help other translators.
 
 
 -------------------------------------------------------------------------------
@@ -66,8 +76,10 @@ This file contains UTF-8 text. Make sure your editor is set to UTF-8.
 -------------------------------------------------------------------------------
 
 -- 1. Global settings (do not edit!)
+Font("cp437")
 Language("Suomi", "Finnish", "fi", "fin")
 Inherit("english")
+IsArabicNumerals(true)
 
 -- 2. Faxes
 fax = {
@@ -229,7 +241,6 @@ options_window = {
   fullscreen            = "Koko ruutu",
   width                 = "Leveys",
   height                = "Korkeus",
-  change_resolution     = "Vaihda resoluutio",
   browse                = "Selaa...",
   new_th_directory      = "Tässä voit määrittää uuden Theme Hospital -pelin asennushakemiston. Kun olet valinnut uuden hakemiston, peli käynnistyy uudestaan.",
   cancel                = "Peruuta",
@@ -299,7 +310,6 @@ tooltip = {
     fullscreen_button   = "Klikkaa kytkeäksesi koko ruudun -tilan päälle tai pois",
     width               = "Syötä peli-ikkunan haluttu leveys",
     height              = "Syötä peli-ikkunan haluttu korkeus",
-    change_resolution   = "Muuta ikkunan resoluutio vasemmalla annettujen arvojen mukaiseksi",
     language            = "Valitse kieleksi %s",
     browse              = "Selaa hakemistoja valitaksesi uuden Theme Hospital -pelin asennushakemiston",
     back                = "Sulje tämä ikkuna",

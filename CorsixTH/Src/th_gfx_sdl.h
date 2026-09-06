@@ -25,7 +25,7 @@ SOFTWARE.
 
 #include "config.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include <array>
 #include <memory>
@@ -45,18 +45,35 @@ struct clip_rect : public SDL_Rect {
   typedef Uint16 w_h_type;
 };
 
+/**
+ * A size (width x height) in Window coordinates
+ */
+struct window_size {
+  int width;
+  int height;
+};
+
+/**
+ * A size (width x height) in Render coordinates (pixels)
+ */
+struct render_size {
+  int width;
+  int height;
+};
+
 /** Helper structure with parameters to create a #render_target. */
 struct render_target_creation_params {
-  int width;               ///< Expected width of the render target.
-  int height;              ///< Expected height of the render target.
-  int bpp;                 ///< Expected colour depth of the render target.
-  bool fullscreen;         ///< Run full-screen.
-  bool present_immediate;  ///< Whether to present immediately to the user
-                           ///< (else wait for Vsync).
-  bool direct_zoom;  ///< Scale each texture when copying if true, otherwise
-                     ///< render to intermediate texture and scale.
-  int min_width;     ///< Minimum width of the render target.
-  int min_height;    ///< Minimum height of the render target.
+  window_size size{};        ///< Target size of the window.
+  bool fullscreen{};         ///< Run fullscreen.
+  bool maximized{};          ///< Run maximized (when not fullscreen).
+  bool aspect_ratio_4_3{};   ///< Display the game letterboxed to 4:3
+  bool present_immediate{};  ///< Whether to present immediately to the user
+                             ///< (else wait for Vsync).
+  bool direct_zoom{};        ///< Scale each texture when copying if true,
+                             ///< otherwise render to intermediate texture and
+                             ///< scale.
+  bool hidpi{};              ///< Enable HiDPI on the game window.
+  window_size min_size{};    ///< Minimum size of the window.
 };
 
 enum class scaled_items;
@@ -259,6 +276,9 @@ class render_target {
   //! Update the parameters for the render target
   bool update(const render_target_creation_params& params);
 
+  //! Update the render target when the size changes
+  void on_pixel_size_change();
+
   //! Get the reason for the last operation failing
   const char* get_last_error();
 
@@ -271,15 +291,15 @@ class render_target {
   //! Paint the entire render target black
   bool fill_black();
 
+  //! Paint the entire render target with a solid colour
+  bool fill_colour(uint32_t colour);
+
   //! Sets a blue filter on the current surface.
   // Used to add the blue effect when the game is paused.
   void set_blue_filter_active(bool bActivate);
 
   //! Fill a rectangle of the render target with a solid colour
-  bool fill_rect(uint32_t iColour, int iX, int iY, int iW, int iH);
-
-  //! Sets a minimum size for the render target
-  int set_minimum_size(int width, int height);
+  bool fill_rect(uint32_t iColour, float iX, float iY, float iW, float iH);
 
   class scoped_clip {
    public:
@@ -296,11 +316,24 @@ class render_target {
   //! Restore the previous clip rectangle.
   void pop_clip_rect();
 
-  //! Get the width of the render target (in pixels)
-  int get_width() const;
+  //! Get the size of the render viewport (in pixels)
+  render_size get_size() const;
 
-  //! Get the height of the render target (in pixels)
-  int get_height() const;
+  //! Get the width of the render target adjusted by the current scale factor
+  int get_scaled_width() const;
+
+  //! Get the height of the render target adjusted by the current scale factor
+  int get_scaled_height() const;
+
+  //! Get the current window size (in window coordinates)
+  window_size get_window_size() const;
+
+  //! Get the maximum window size that fits on the usable display area
+  window_size get_max_window_size() const;
+
+  //! Get the display scale reported by the windowing system for the current
+  //! window
+  float get_display_scale() const;
 
   //! Enable optimisations for non-overlapping draws
   void start_nonoverlapping_draws();
@@ -346,8 +379,8 @@ class render_target {
 
   class scoped_target_texture final : public scoped_buffer {
    public:
-    scoped_target_texture(render_target* pTarget, int iX, int iY, int iWidth,
-                          int iHeight, bool bScale);
+    scoped_target_texture(render_target* pTarget, float iX, float iY,
+                          int iWidth, int iHeight, bool bScale);
     scoped_target_texture(scoped_target_texture&) = delete;
     scoped_target_texture& operator=(scoped_target_texture&) = delete;
     ~scoped_target_texture() override;
@@ -358,12 +391,14 @@ class render_target {
    private:
     render_target* target;
     scoped_target_texture* previous_target;
-    SDL_Rect rect;
+    SDL_FRect rect;
     bool scale;
     SDL_Texture* texture{nullptr};
   };
 
   SDL_Renderer* get_renderer() const { return renderer; }
+
+  SDL_Window* get_window() const { return window; }
 
   //! Should bitmaps be scaled?
   /*!
@@ -377,11 +412,11 @@ class render_target {
                                          const uint8_t* pPixels,
                                          const ::palette* pPalette,
                                          uint32_t iSpriteFlags) const;
-  SDL_Texture* create_texture(int iWidth, int iHeight,
-                              const uint32_t* pPixels) const;
+  SDL_Texture* create_texture(int iWidth, int iHeight, const uint32_t* pPixels,
+                              uint32_t sprite_flags) const;
   void draw(SDL_Texture* pTexture, const SDL_Rect* prcSrcRect,
-            const SDL_Rect* prcDstRect, int iFlags);
-  void draw_line(line_sequence* pLine, int iX, int iY);
+            const SDL_FRect* prcDstRect, int iFlags);
+  void draw_line(line_sequence* pLine, float iX, float iY);
 
   //! Begin drawing to an intermediate unscaled texture targeting the given
   //! location and size. The intermediate drawing will be committed once
@@ -407,13 +442,11 @@ class render_target {
   SDL_Renderer* renderer{nullptr};
   scoped_target_texture* current_target{nullptr};
   std::unique_ptr<scoped_target_texture> zoom_buffer;
-  SDL_PixelFormat* pixel_format{nullptr};
+  const SDL_PixelFormatDetails* pixel_format{nullptr};
   bool blue_filter_active{false};
   cursor* game_cursor{nullptr};
   double bitmap_scale_factor{1.0};  ///< Bitmap scale factor.
   double global_scale_factor{1.0};  ///< Global scale factor.
-  int width{-1};
-  int height{-1};
   int cursor_x{};
   int cursor_y{};
 
@@ -425,12 +458,8 @@ class render_target {
 
   bool scale_bitmaps{false};  ///< Whether bitmaps should be scaled.
   bool supports_target_textures{};
-
-  // In SDL2 < 2.0.4 there is an issue with the y coordinates used for
-  // ClipRects in opengl and opengles.
-  // see: https://bugzilla.libsdl.org/show_bug.cgi?id=2700
-  bool apply_opengl_clip_fix{};
   bool direct_zoom{};
+  bool aspect_ratio_4_3{};
 };
 
 //! Stored image.
@@ -465,7 +494,7 @@ class raw_bitmap {
       @param iX Destination x position.
       @param iY Destination y position.
   */
-  void draw(render_target* pCanvas, int iX, int iY);
+  void draw(render_target* pCanvas, float iX, float iY);
 
   //! Draw part of the image at a given position at the given canvas.
   /*!
@@ -477,7 +506,7 @@ class raw_bitmap {
       @param iWidth Width of the part to display.
       @param iHeight Height of the part to display.
   */
-  void draw(render_target* pCanvas, int iX, int iY, int iSrcX, int iSrcY,
+  void draw(render_target* pCanvas, float iX, float iY, int iSrcX, int iSrcY,
             int iWidth, int iHeight);
 
  private:
@@ -608,7 +637,7 @@ class sprite_sheet {
       @param effect The animation effect to apply to the sprite.
       @param scale_factor How much to scale the sprite when drawing.
   */
-  void draw_sprite(render_target* pCanvas, size_t iSprite, int iX, int iY,
+  void draw_sprite(render_target* pCanvas, size_t iSprite, float iX, float iY,
                    uint32_t iFlags, size_t effect_ticks = 0u,
                    animation_effect effect = animation_effect::none,
                    int scale_factor = 1);
@@ -698,7 +727,7 @@ class cursor {
 
   void use(render_target* pTarget);
 
-  static bool set_position(render_target* pTarget, int iX, int iY);
+  static bool set_position(render_target* pTarget, float iX, float iY);
 
   void draw(render_target* pCanvas, int iX, int iY);
 
@@ -719,7 +748,7 @@ class line_sequence {
 
   void set_width(double lineWidth);
 
-  void draw(render_target* pCanvas, int iX, int iY);
+  void draw(render_target* pCanvas, float iX, float iY);
 
   void set_colour(uint8_t iR, uint8_t iG, uint8_t iB, uint8_t iA = 255);
 

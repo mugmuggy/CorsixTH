@@ -20,7 +20,7 @@ SOFTWARE. --]]
 
 -- Test for hit within the view circle
 local --[[persistable:staff_dialog_is_in_view_circle]] function is_in_view_circle(x, y, is_handyman)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   local circle_center_y = is_handyman and 276 * s or 248 * s
   return (x - 55 * s)^2 + (y - circle_center_y)^2 < (39 * s)^2
 end
@@ -148,7 +148,7 @@ function UIStaff:UIStaff(ui, staff)
   self:makeTooltip(_S.tooltip.staff_window.salary, 90, 191 + offset, 204, 214 + offset)
   -- Non-rectangular tooltip has to be realized with dynamic tooltip at the moment
   self:makeDynamicTooltip(--[[persistable:staff_dialog_center_tooltip]]function(x, y)
-    if is_in_view_circle(x, y, class.is(staff, Handyman)) then
+    if is_in_view_circle(x, y, profile:isType("Handyman")) then
       return _S.tooltip.staff_window.center_view
     end
   end, 17, 211 + offset, 92, 286 + offset)
@@ -163,7 +163,7 @@ function UIStaff:getStaffPosition(dx, dy)
 end
 
 function UIStaff:draw(canvas, x_, y_)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   local x, y = self.x * s + x_, self.y * s + y_
 
   local px, py = self:getStaffPosition(37, 61)
@@ -263,7 +263,7 @@ function UIStaff:onMouseUp(button, x, y)
     self.do_scroll = false
   end
   local repaint = Window.onMouseUp(self, button, x, y)
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   -- Test for hit within the view circle and name box
   local hit_namebox = x > self.tooltip_regions[1].x * s and x < self.tooltip_regions[1].r * s
                       and y > self.tooltip_regions[1].y * s and y < self.tooltip_regions[1].b * s

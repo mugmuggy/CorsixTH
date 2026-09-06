@@ -82,8 +82,12 @@ function Window:setPosition(x, y)
   self.x_original = x
   self.y_original = y
   -- Convert x and y to absolute pixel positions with regard to top/left
-  local s = self.apply_ui_scale and TheApp.config.ui_scale or 1
-  local w, h = TheApp.config.width / s, TheApp.config.height / s
+  local w, h = TheApp.video:getRenderSize()
+  if self.apply_ui_scale then
+    local s = TheApp.gfx:getUIScale()
+    w = w / s
+    h = h / s
+  end
   if x < 0 then
     x = math.ceil(w - self.width + x)
   elseif x < 1 then
@@ -177,6 +181,7 @@ function Panel:Panel()
   self.colour = nil
   self.custom_draw = nil
   self.visible = nil
+  self.wrap_text = false
 end
 
 local panel_mt = permanent("Window.<panel_mt>", getmetatable(Panel()))
@@ -217,17 +222,19 @@ end
 --[[ Set the colour of a panel
 ! Note: This works only with ColourPanel and BevelPanel, not normal (sprite) panels.
 !param col (table) Colour given as a table with three fields red, green and blue, each an integer value in [0, 255].
+!param preserve_disable (boolean) If true, do not adjust the panel's disabled colour.
 ]]
-function Panel:setColour(col)
+function Panel:setColour(col, preserve_disable)
   self.colour = self.colour and TheApp.video:mapRGB(col.red, col.green, col.blue)
   self.highlight_colour = self.highlight_colour and TheApp.video:mapRGB(
-    sanitize(col.red + 40),
-    sanitize(col.green + 40),
-    sanitize(col.blue + 40))
+    sanitize(col.red + 60),
+    sanitize(col.green + 60),
+    sanitize(col.blue + 60))
   self.shadow_colour = self.shadow_colour and TheApp.video:mapRGB(
-    sanitize(col.red - 40),
-    sanitize(col.green - 40),
-    sanitize(col.blue - 40))
+    sanitize(col.red - 60),
+    sanitize(col.green - 60),
+    sanitize(col.blue - 60))
+  if preserve_disable then return self end
   self.disabled_colour = self.disabled_colour and TheApp.video:mapRGB(
     sanitize(math.floor((col.red + 100) / 2)),
     sanitize(math.floor((col.green + 100) / 2)),
@@ -302,17 +309,17 @@ end
 --!return y and x end positions after drawing
 function Panel:drawLabel(canvas, x, y, limit)
   local text = self.label
-  local multi_line = type(text) == "table"
-  local wrapped = not self.auto_clip
   local center_y = false
-  local s = self.apply_ui_scale and TheApp.config.ui_scale or 1
+  local wrapped = not self.auto_clip
 
+  local multi_line = type(text) == "table"
   if not multi_line then
     text = {text}
-    wrapped = false
     center_y = true
+    wrapped = (self.wrap_text ~= nil) and self.wrap_text or false
   end
 
+  local s = self.apply_ui_scale and TheApp.gfx:getUIScale() or 1
   local next_y = y + self.y * s + s
   local last_x = x + self.x * s + 2 * s
   for i, line in ipairs(text) do
@@ -363,6 +370,13 @@ function Panel:setVisible(visibility)
   return self
 end
 
+--! Set whether text wrapping is enabled for this panel.
+--!param enabled (bool) Whether to text wrapping enabled.
+function Panel:setTextWrap(enabled)
+  self.wrap_text = enabled
+  return self
+end
+
 --[[ Add a `Panel` to the window.
 ! Panels form the basic building blocks of most windows. A panel is a small
 bitmap coupled with a position, and by combining several panels, a window can
@@ -404,7 +418,7 @@ function Window:removeAllPanels()
 end
 
 local --[[persistable: window_panel_colour_draw]] function panel_colour_draw(panel, canvas, x, y)
-  local s = panel.apply_ui_scale and TheApp.config.ui_scale or 1
+  local s = panel.apply_ui_scale and TheApp.gfx:getUIScale() or 1
   canvas:drawRect(panel.colour, x + panel.x * s, y + panel.y * s, panel.w * s, panel.h * s)
   if panel.label then
     panel:drawLabel(canvas, x, y)
@@ -441,7 +455,7 @@ function Window:addColourPanel(x, y, w, h, r, g, b, apply_ui_scale)
 end
 
 local --[[persistable: window_panel_bevel_draw]] function panel_bevel_draw(panel, canvas, x, y)
-  local s = panel.apply_ui_scale and TheApp.config.ui_scale or 1
+  local s = panel.apply_ui_scale and TheApp.gfx:getUIScale() or 1
 
   if panel.lowered then
     canvas:drawRect(panel.highlight_colour, x + panel.x * s, y + panel.y * s, panel.w * s, panel.h * s)
@@ -472,14 +486,14 @@ features a highlight and a shadow that makes it appear either lowered or raised.
 ]]
 function Window:addBevelPanel(x, y, w, h, colour, highlight_colour, shadow_colour, disabled_colour, lowered_colour, apply_ui_scale)
   highlight_colour = highlight_colour or {
-    red = sanitize(colour.red + 40),
-    green = sanitize(colour.green + 40),
-    blue = sanitize(colour.blue + 40),
+    red = sanitize(colour.red + 60),
+    green = sanitize(colour.green + 60),
+    blue = sanitize(colour.blue + 60),
   }
   shadow_colour = shadow_colour or {
-    red = sanitize(colour.red - 40),
-    green = sanitize(colour.green - 40),
-    blue = sanitize(colour.blue - 40),
+    red = sanitize(colour.red - 60),
+    green = sanitize(colour.green - 60),
+    blue = sanitize(colour.blue - 60),
   }
   disabled_colour = disabled_colour or {
     red = sanitize(math.floor((colour.red + 100) / 2)),
@@ -1016,8 +1030,10 @@ function Textbox:setActive(active)
     self.cursor_pos[2] = type(self.text) == "table" and string.len(self.text[#self.text]) or string.len(self.text)
     -- Update text
     self.panel:setLabel(self.text)
+    TheApp:startTextInput()
   else
     self.cursor_state = false
+    TheApp:stopTextInput()
   end
 
   self.active = active
@@ -1484,8 +1500,15 @@ function Window:makeHotkeyBoxOnPanel(panel, confirm_callback, abort_callback)
   return hotkeybox
 end
 
+-- Return the X and Y coordinates of the window as drawn on
+-- the screen after factoring in the ui_scale.
+function Window:getRealXY()
+  local s = self.apply_ui_scale and TheApp.gfx:getUIScale() or 1
+  return self.x * s, self.y * s
+end
+
 function Window:draw(canvas, x, y)
-  local s = self.apply_ui_scale and TheApp.config.ui_scale or 1
+  local s = self.apply_ui_scale and TheApp.gfx:getUIScale() or 1
   x, y = x + self.x * s, y + self.y * s
   if self.panels[1] then
     local panel_sprites = self.panel_sprites
@@ -1547,7 +1570,7 @@ function Window:onCursorWorldPositionChange(x, y)
 end
 
 function Window:hitTestPanel(x, y, panel)
-  local s = panel.apply_ui_scale and TheApp.config.ui_scale or 1
+  local s = panel.apply_ui_scale and TheApp.gfx:getUIScale() or 1
   local xpos, ypos = x - panel.x * s, y - panel.y * s
   if panel.visible and xpos >= 0 and ypos >= 0 then
     if panel.w and panel.h then
@@ -1599,7 +1622,7 @@ function Window:hitTest(x, y)
   end
   if self.windows then
     for _, child in ipairs(self.windows) do
-      local s = child.apply_ui_scale and TheApp.config.ui_scale or 1
+      local s = child.apply_ui_scale and TheApp.gfx:getUIScale() or 1
       if child:hitTest(x - child.x * s, y - child.y * s) then
         return true
       end
@@ -1613,7 +1636,7 @@ function Window:onMouseDown(button, x, y)
   if not self.visible then return false end
   if self.windows then
     for _, window in ipairs(self.windows) do
-      local ws = window.apply_ui_scale and TheApp.config.ui_scale or 1
+      local ws = window.apply_ui_scale and TheApp.gfx:getUIScale() or 1
       if window:onMouseDown(button, x - window.x * ws, y - window.y * ws) then
         repaint = true
         break
@@ -1622,7 +1645,7 @@ function Window:onMouseDown(button, x, y)
   end
   if not repaint and (button == "left" or button == "right") then
     for _, btn in ipairs(self.buttons) do
-      local bs = btn.panel_for_sprite.apply_ui_scale and TheApp.config.ui_scale or 1
+      local bs = btn.panel_for_sprite.apply_ui_scale and TheApp.gfx:getUIScale() or 1
       if btn.enabled and
           btn.x * bs <= x and x < btn.r * bs and btn.y * bs <= y and y < btn.b * bs and
           (button == "left" or btn.on_rightclick ~= nil) then
@@ -1639,7 +1662,7 @@ function Window:onMouseDown(button, x, y)
         break
       end
     end
-    local s = self.apply_ui_scale and TheApp.config.ui_scale or 1
+    local s = self.apply_ui_scale and TheApp.gfx:getUIScale() or 1
     for _, bar in ipairs(self.scrollbars) do
       if bar.enabled and self:hitTestPanel(x, y, bar.slider) then
         self.active_scrollbar = bar
@@ -1697,7 +1720,7 @@ function Window:onMouseUp(button, x, y)
 
   if self.windows then
     for _, window in ipairs(self.windows) do
-      local s = window.apply_ui_scale and TheApp.config.ui_scale or 1
+      local s = window.apply_ui_scale and TheApp.gfx:getUIScale() or 1
       if window:onMouseUp(button, x - window.x * s, y - window.y * s) then
         repaint = true
         break -- Click has been handled. No need to look any further.
@@ -1708,7 +1731,7 @@ function Window:onMouseUp(button, x, y)
   if button == "left" or button == "right" then
     local btn = self.active_button
     if btn then
-      local bs = btn.panel_for_sprite.apply_ui_scale and TheApp.config.ui_scale or 1
+      local bs = btn.panel_for_sprite.apply_ui_scale and TheApp.gfx:getUIScale() or 1
       btn.panel_for_sprite.sprite_index = btn.sprite_index_normal
       btn.active = false
       btn.panel_for_sprite.lowered = btn.panel_lowered_normal
@@ -1731,6 +1754,14 @@ function Window:onMouseUp(button, x, y)
   return repaint
 end
 
+--! This function can be used to control mousewheel input (i.e. scrolling).
+--! Override this function in derived classes, with what you'd like to happen
+--! on this event.
+--!param x (int) Mousewheel has moved on the horizontal axis (-1 is
+-- leftward movement, +1 is rightward movement)
+--!param y (int) Mousewheel has moved on the vertical axis (-1 is downward
+-- movement, +1 is upward movement)
+--!return repaint (boolean) if screen is to be redrawn.
 function Window:onMouseWheel(x, y)
   local repaint = false
   if self.windows then
@@ -1779,14 +1810,14 @@ function Window:beginDrag(x, y)
     return false
   end
 
-  local s = self.apply_ui_scale and TheApp.config.ui_scale or 1
+  local s = self.apply_ui_scale and TheApp.gfx:getUIScale() or 1
   self.dragging = true
   self.ui.drag_mouse_move = --[[persistable:window_drag_mouse_move]] function (sx, sy)
     -- sx and sy are cursor screen co-ords. Convert to window's new abs co-ords
     sx = sx - x
     sy = sy - y
     -- Calculate best positioning
-    local w, h = TheApp.config.width, TheApp.config.height
+    local w, h = TheApp.video:getRenderSize()
     if TheApp.key_modifiers.ctrl then
       local px = round(sx / (w - self.width * s), 0.1)
       local py = round(sy / (h - self.height * s), 0.1)
@@ -1826,7 +1857,7 @@ function Window:onMouseMove(x, y, dx, dy)
 
   if self.windows then
     for _, window in ipairs(self.windows) do
-      local s = window.apply_ui_scale and TheApp.config.ui_scale or 1
+      local s = window.apply_ui_scale and TheApp.gfx:getUIScale() or 1
       if window:onMouseMove(x - window.x * s, y - window.y * s, dx, dy) then
         repaint = true
       end
@@ -1836,7 +1867,7 @@ function Window:onMouseMove(x, y, dx, dy)
   if self.active_button then
     local btn = self.active_button
     local index = btn.sprite_index_blink or btn.sprite_index_normal
-    local bs = btn.panel_for_sprite.apply_ui_scale and TheApp.config.ui_scale or 1
+    local bs = btn.panel_for_sprite.apply_ui_scale and TheApp.gfx:getUIScale() or 1
     if btn.x * bs <= x and x < btn.r * bs and btn.y * bs <= y and y < btn.b * bs then
       index = btn.sprite_index_active
       self.active_button.active = true
@@ -1845,7 +1876,7 @@ function Window:onMouseMove(x, y, dx, dy)
       self.active_button.active = false
       btn.panel_for_sprite.lowered = btn.panel_lowered_normal
       for _, button in ipairs(self.buttons) do
-        bs = btn.panel_for_sprite.apply_ui_scale and TheApp.config.ui_scale or 1
+        bs = btn.panel_for_sprite.apply_ui_scale and TheApp.gfx:getUIScale() or 1
         if button.enabled and button.x * bs <= x and x < button.r * bs and button.y * bs <= y and y < button.b * bs then
           button.panel_for_sprite.sprite_index = button.sprite_index_active
           button.active = true
@@ -1863,7 +1894,7 @@ function Window:onMouseMove(x, y, dx, dy)
   end
 
   if self.active_scrollbar then
-    local s = self.apply_ui_scale and TheApp.config.ui_scale or 1
+    local s = self.apply_ui_scale and TheApp.gfx:getUIScale() or 1
     local bar = self.active_scrollbar
     if bar.direction == "x" then
       bar:setXorY(math.floor(x / s - bar.down_x))
@@ -2045,11 +2076,11 @@ function Window:getTooltipForElement(elem, x, y)
   elseif elem.panel_for_sprite and elem.panel_for_sprite.apply_ui_scale ~= nil then
     apply_ui_scale = elem.panel_for_sprite.apply_ui_scale
   end
-  local elem_scale = apply_ui_scale and TheApp.config.ui_scale or 1
+  local elem_scale = apply_ui_scale and TheApp.gfx:getUIScale() or 1
   local xpos = elem.tooltip_x and elem.tooltip_x * elem_scale or nil
   local ypos = elem.tooltip_y and elem.tooltip_y * elem_scale or nil
 
-  local window_scale = self.apply_ui_scale and TheApp.config.ui_scale or 1
+  local window_scale = self.apply_ui_scale and TheApp.gfx:getUIScale() or 1
   if xpos then xpos = xpos + self.x * window_scale end -- NB: can be nil, then it means position at mouse cursor
   if ypos then ypos = ypos + self.y * window_scale end
   if text then
@@ -2065,20 +2096,20 @@ end
 --!param x (integer) The X coordinate relative to the top-left corner.
 --!param y (integer) The Y coordinate relative to the top-left corner.
 function Window:getTooltipAt(x, y)
-  local s = self.apply_ui_scale and TheApp.config.ui_scale or 1
+  local s = self.apply_ui_scale and TheApp.gfx:getUIScale() or 1
   if x < 0 or y < 0 or (self.width and x >= self.width * s) or (self.height and y >= self.height * s) then
     return
   end
   if self.windows then
     for _, window in ipairs(self.windows) do
-      local ws = window.apply_ui_scale and TheApp.config.ui_scale or 1
+      local ws = window.apply_ui_scale and TheApp.gfx:getUIScale() or 1
       if window:hitTest(x - window.x * ws, y - window.y * ws) then
         return window:getTooltipAt(x - window.x * ws, y - window.y * ws)
       end
     end
   end
   for _, btn in ipairs(self.buttons) do
-    local bs = btn.panel_for_sprite.apply_ui_scale and TheApp.config.ui_scale or 1
+    local bs = btn.panel_for_sprite.apply_ui_scale and TheApp.gfx:getUIScale() or 1
     if btn.panel_for_sprite.visible ~= false and
         btn.tooltip and
         btn.x * bs <= x and x < btn.r * bs and btn.y * bs <= y and y < btn.b * bs then
@@ -2133,14 +2164,23 @@ function Window:afterLoad(old, new)
     self.apply_ui_scale = true
   end
 
+  -- If a window or panel is asked to close during an afterLoad cycle we
+  -- can skip entries so use backwards iteration here instead
   if self.windows then
-    for _, w in pairs(self.windows) do
-      w:afterLoad(old, new)
+    for i = #self.windows, 1, -1 do
+      local window = self.windows[i]
+      if window then
+        window:afterLoad(old, new)
+      end
     end
   end
+
   if self.panels then
-    for _, p in pairs(self.panels) do
-      p:afterLoad(old, new)
+    for i = #self.panels, 1, -1 do
+      local panel = self.panels[i]
+      if panel then
+        panel:afterLoad(old, new)
+      end
     end
   end
 end

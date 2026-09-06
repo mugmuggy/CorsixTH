@@ -22,16 +22,28 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. --]]
+-- Translator warning:
+-- Theme Hospital's original bitmap fonts have a limited character set, and
+-- some letters are missing; supported characters are case-sensitive.
+-- Unsupported characters appear as "?" in game. See the supported characters:
+-- https://github.com/CorsixTH/CorsixTH/wiki/Localization
+-- Translators may use plain-character substitutions (for example, "e" for an
+-- accented "e").
+-- If substitutions are unsuitable, change Font("cp437") to Font("unicode")
+-- to use the Unicode font instead. You may translate this note into this
+-- file's language if that would help other translators.
 
+Font("cp437")
 Language("Português Brasileiro", "Brazilian Portuguese", "pt_br", "br")
 Inherit("English")
 Encoding(utf8)
+IsArabicNumerals(true)
 
 --Note: All strings should use a single space after full-stops. Only exception is level descriptions.
 -------------------------------  OVERRIDE  ----------------------------------
-adviser.warnings.money_low = "Você está ficando sem dinheiro!" -- Funny. Exists in German translation, but not existent in english?
-tooltip.graphs.reputation = "Alternar reputaçäo" -- Incorrectly said "toggle hospital value"
-tooltip.status.close = "Fechar janela de status" -- Incorrectly said "close overview window"
+adviser.warnings.money_low = "Você está ficando sem dinheiro!"
+tooltip.graphs.reputation = "Alternar reputaçäo"
+tooltip.status.close = "Fechar janela de status"
 
 -- tooltip.staff_list.next_person, prev_person is rather next/prev page (also in german, maybe more languages?)
 tooltip.staff_list.next_person = "Mostrar a página seguinte"
@@ -446,12 +458,10 @@ options_window = {
   option_enabled = "Ativado",
   option_disabled = "Desativado",
   fullscreen = "Tela Cheia",
-  resolution = "Resoluçäo",
   capture_mouse = "Capturar Mouse",
   right_mouse_scrolling = "Rolagem do Mouse",
   right_mouse_scrolling_option_middle = "Botäo do Meio",
   right_mouse_scrolling_option_right = "Botäo Direito",
-  custom_resolution = "Personalizar...",
   width = "Largura",
   height = "Altura",
   customise = "Personalizar",
@@ -470,8 +480,6 @@ options_window = {
 tooltip.options_window = {
   fullscreen = "Se o jogo deve ser executado em tela cheia ou modo janela",
   fullscreen_button = "Clique para mudar para tela cheia",
-  resolution = "A resoluçäo que o jogo deve ser executado",
-  select_resolution = "Selecionar uma nova resoluçäo",
   capture_mouse = "Clique para alternar a captura do cursor na janela do jogo",
   right_mouse_scrolling = "Alterne o botäo do mouse que é usado para rolar o mapa",
   width = "Insira a largura da tela desejada",
@@ -567,7 +575,8 @@ tooltip.folders_window = {
   no_font_specified = "Pasta de fontes näo especificada!",
   not_specified = "Pasta näo especificada!",
   default = "Localizaçäo padräo",
-  reset_to_default = "Volta a atribuir a pasta a sua localizaçäo padräo",
+  reset_to_default = "Volta a atribuir a pasta a sua localizaçäo padräo ( %1% )",
+  clear_directory = "Limpar seleção de diretório atual",
   back  = "Fechar este menu e voltar para o menu de Configuraçöes",
 }
 
@@ -997,8 +1006,6 @@ transactions.remove_room = "Construir: Remover sala destruída"
 --------------------------------  UNUSED  -----------------------------------
 ------------------- (kept for backwards compatibility) ----------------------
 
-options_window.change_resolution = "Alterar resoluçäo"
-tooltip.options_window.change_resolution = "Altera a resoluçäo de janela para as dimensöes digitadas na esquerda"
 
 --------------------------------------------------------------------------------------------------------------------------------------------------------
 --------------------------------  MISSING STRINGS IN LANGUAGE "PORTUGUêS DO BRASIL":  -----------------------------------

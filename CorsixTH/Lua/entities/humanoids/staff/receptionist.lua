@@ -71,10 +71,11 @@ function Receptionist:onPlaceInCorridor()
   Staff.onPlaceInCorridor(self)
 
   local world = self.world
-  world:findObjectNear(self, "reception_desk", nil, function(x, y)
+  world:findObjectNear(self, "reception_desk", nil, true, function(x, y)
     local obj = world:getObject(x, y, "reception_desk")
     return obj and obj:occupy(self)
   end)
+  self.hospital:buildReceptionDesksCache() -- Rebuild cache of staffed desks
 end
 
 
@@ -90,6 +91,16 @@ function Receptionist:getDrawingLayer()
     return DrawingLayers.ReceptionistFacingAway
   end
   return DrawingLayers.ReceptionistFacingUser
+end
+
+function Receptionist:onPickup()
+  Staff.onPickup(self)
+  self.hospital:buildReceptionDesksCache() -- Rebuild cache of staffed desks
+end
+
+function Receptionist:fire()
+  Staff.fire(self)
+  self.hospital:buildReceptionDesksCache() -- Rebuild cache of staffed desks
 end
 
 function Receptionist:afterLoad(old, new)

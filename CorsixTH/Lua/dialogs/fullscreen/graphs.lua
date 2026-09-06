@@ -44,7 +44,7 @@ function UIGraphs:UIGraphs(ui)
   local gfx = ui.app.gfx
   if not pcall(function()
     self.background = gfx:loadRaw("Graph01V", 640, 480, "QData", "QData", "Graph01V.pal", true)
-    local palette = gfx:loadPalette("QData", "Graph01V.pal", true)
+    local palette = gfx:getPalette("Graph01V.pal")
     self.panel_sprites = gfx:loadSpriteTable("QData", "Graph02V", true, palette)
     self.white_font = gfx:loadFontAndSpriteTable("QData", "Font01V", false, palette, { apply_ui_scale = true })
     self.black_font = gfx:loadFontAndSpriteTable("QData", "Font00V", false, palette, { apply_ui_scale = true })
@@ -279,7 +279,7 @@ local function updateTextPositions(graph)
 end
 
 function UIGraphs:updateLines()
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   self.values = self:getHospitalStatistics()
 
   -- Construct meta data about each graph line.
@@ -382,7 +382,7 @@ function UIGraphs:draw(canvas, x, y)
     self:updateLines()
   end
 
-  local s = TheApp.config.ui_scale
+  local s = TheApp.gfx:getUIScale()
   canvas:scale(s, "bitmap")
   self.background:draw(canvas, self.x * s + x, self.y * s + y)
   canvas:scale(1, "bitmap")
@@ -490,7 +490,7 @@ function UIGraphs:afterLoad(old, new)
     local gfx = TheApp.gfx
 
     self.background = gfx:loadRaw("Graph01V", 640, 480, "QData", "QData", "Graph01V.pal", true)
-    local palette = gfx:loadPalette("QData", "Graph01V.pal", true)
+    local palette = gfx:getPalette("Graph01V.pal")
     self.panel_sprites = gfx:loadSpriteTable("QData", "Graph02V", true, palette)
     self.white_font = gfx:loadFontAndSpriteTable("QData", "Font01V", false, palette, { apply_ui_scale = true })
     self.black_font = gfx:loadFontAndSpriteTable("QData", "Font00V", false, palette, { apply_ui_scale = true })
